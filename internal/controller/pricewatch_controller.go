@@ -22,8 +22,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	warframemarketv1alpha1 "github.com/benkeil/warframe-market-operator/api/v1alpha1"
 	"github.com/benkeil/warframe-market-operator/internal/domain/usecase"
@@ -55,13 +57,19 @@ func (r *PriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	if useCaseErr != nil {
+		log.Error(useCaseErr, "reconcile failed")
+	} else {
+		log.Info("reconcile successful")
+	}
+
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, useCaseErr
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PriceWatchReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&warframemarketv1alpha1.PriceWatch{}).
+		For(&warframemarketv1alpha1.PriceWatch{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("pricewatch").
 		Complete(r)
 }

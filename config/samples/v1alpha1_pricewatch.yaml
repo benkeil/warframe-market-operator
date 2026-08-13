@@ -4,7 +4,10 @@ metadata:
   labels:
     app.kubernetes.io/name: warframe-market-operator
     app.kubernetes.io/managed-by: kustomize
-  name: default
+  name: primed-firestorm
 spec:
   itemSlug: primed_firestorm
-  threshold: 50
+  threshold: 40
+  notificationWindow:
+    from: "08:00"
+    to: "22:00"

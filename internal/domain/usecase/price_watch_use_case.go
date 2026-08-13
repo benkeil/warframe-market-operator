@@ -8,9 +8,22 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	warframemarketv1alpha1 "github.com/benkeil/warframe-market-operator/api/v1alpha1"
 	"github.com/benkeil/warframe-market-operator/internal/domain/service"
+)
+
+// NotifyReason describes why a notification was or was not sent.
+type NotifyReason string
+
+const (
+	NotifyReasonPriceAboveThreshold    NotifyReason = "price above threshold"
+	NotifyReasonOutsideWindow          NotifyReason = "outside notification window"
+	NotifyReasonNewDay                 NotifyReason = "new day reset"
+	NotifyReasonFirstNotificationToday NotifyReason = "first notification today"
+	NotifyReasonNewLow                 NotifyReason = "new low today"
+	NotifyReasonNoNewLow               NotifyReason = "no new low today"
 )
 
 const conditionTypePriceSynced = "PriceSynced"
@@ -36,6 +49,9 @@ func NewPriceWatchUseCase(marketService service.WarframeMarketService, notificat
 // priceWatch.Status with the cheapest price, a PriceSynced condition, and the last
 // notified price when a notification is sent.
 func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframemarketv1alpha1.PriceWatch) error {
+	log := logf.FromContext(ctx).WithValues("item", priceWatch.Spec.ItemSlug, "threshold", priceWatch.Spec.Threshold)
+
+	log.Info("fetching top orders")
 	topOrders, err := uc.marketService.GetTopOrdersByItem(ctx, priceWatch.Spec.ItemSlug, service.OrdersFilter{})
 
 	condition := metav1.Condition{
@@ -45,6 +61,7 @@ func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframema
 	}
 
 	if err != nil {
+		log.Error(err, "failed to fetch top orders")
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "FetchFailed"
 		condition.Message = fmt.Sprintf("Failed to fetch top orders: %v", err)
@@ -53,6 +70,7 @@ func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframema
 	}
 
 	if len(topOrders.Sell) == 0 {
+		log.Info("no sell orders found")
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoSellOrders"
 		condition.Message = fmt.Sprintf("No sell orders found for item %q", priceWatch.Spec.ItemSlug)
@@ -62,54 +80,60 @@ func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframema
 
 	cheapest := cheapestPlatinum(topOrders.Sell)
 	priceWatch.Status.CheapestPrice = cheapest
+	log.Info("price check", "cheapest", cheapest)
 
 	condition.Status = metav1.ConditionTrue
 	condition.Reason = "PriceFetched"
 	condition.Message = fmt.Sprintf("Cheapest sell price is %d platinum", cheapest)
 	setCondition(&priceWatch.Status.Conditions, condition)
 
-	if uc.shouldNotify(cheapest, priceWatch.Spec.Threshold, &priceWatch.Status, priceWatch.Spec.NotificationWindow) {
+	notify, reason := uc.shouldNotify(cheapest, priceWatch.Spec.Threshold, &priceWatch.Status, priceWatch.Spec.NotificationWindow)
+	if notify {
+		log.Info("sending notification", "cheapest", cheapest)
 		title := fmt.Sprintf("Price alert: %s", priceWatch.Spec.ItemSlug)
 		message := fmt.Sprintf("%d platinum (threshold: %d)", cheapest, priceWatch.Spec.Threshold)
 		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
+			log.Error(err, "failed to send notification")
 			return fmt.Errorf("sending notification: %w", err)
 		}
 		now := metav1.Now()
 		priceWatch.Status.LastNotifiedPrice = &cheapest
 		priceWatch.Status.LastNotifiedAt = &now
+		log.Info("notification sent", "cheapest", cheapest)
+	} else {
+		log.Info("notification skipped", "cheapest", cheapest, "reason", reason)
 	}
 
 	return nil
 }
 
-// shouldNotify returns true when all of the following hold:
-//   - cheapest is at or below the threshold
-//   - the current time is within the notification window (if configured)
-//   - either no notification has been sent today, or cheapest is strictly below the last notified price
-//
-// When a new calendar day begins, LastNotifiedPrice is treated as nil so a fresh
-// notification is sent even if today's price is higher than yesterday's.
-func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.PriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) bool {
+// shouldNotify returns whether a notification should be sent and the reason for the decision.
+func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.PriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) (bool, NotifyReason) {
 	if cheapest > threshold {
-		return false
+		return false, NotifyReasonPriceAboveThreshold
 	}
 
 	now := time.Now()
 
 	if window != nil && !isWithinWindow(now, window.From, window.To) {
-		return false
+		return false, NotifyReasonOutsideWindow
 	}
 
-	// New calendar day → reset: allow notifying regardless of previous price.
 	if status.LastNotifiedAt != nil {
 		ly, lm, ld := status.LastNotifiedAt.Time.Date()
 		ty, tm, td := now.Date()
 		if ly != ty || lm != tm || ld != td {
-			return true
+			return true, NotifyReasonNewDay
 		}
 	}
 
-	return status.LastNotifiedPrice == nil || cheapest < *status.LastNotifiedPrice
+	if status.LastNotifiedPrice == nil {
+		return true, NotifyReasonFirstNotificationToday
+	}
+	if cheapest < *status.LastNotifiedPrice {
+		return true, NotifyReasonNewLow
+	}
+	return false, NotifyReasonNoNewLow
 }
 
 // isWithinWindow reports whether t falls within the [from, to] time-of-day range.

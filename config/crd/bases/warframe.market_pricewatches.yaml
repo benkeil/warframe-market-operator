@@ -14,7 +14,29 @@ spec:
     singular: pricewatch
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.itemSlug
+      name: Item
+      type: string
+    - jsonPath: .spec.threshold
+      name: Threshold
+      type: integer
+    - jsonPath: .status.cheapestPrice
+      name: Cheapest
+      type: integer
+    - jsonPath: .status.lastNotifiedPrice
+      name: Last Notified
+      type: integer
+    - jsonPath: .status.lastNotifiedAt
+      name: Notified At
+      type: date
+    - jsonPath: .status.conditions[?(@.type=='PriceSynced')].status
+      name: Synced
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: PriceWatch is the Schema for the pricewatches API.
@@ -45,6 +67,27 @@ spec:
                   (e.g. "ash_prime_set"). It serves as the primary key for looking up orders.
                 minLength: 1
                 type: string
+              notificationWindow:
+                description: |-
+                  NotificationWindow restricts notifications to a specific time range each day.
+                  If omitted, notifications are sent at any time.
+                  When a new calendar day begins, the notification state resets so a fresh
+                  notification can be sent regardless of the previous day's price.
+                properties:
+                  from:
+                    description: From is the start of the window in "HH:MM" format
+                      (e.g. "10:00").
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                    type: string
+                  to:
+                    description: To is the end of the window in "HH:MM" format (e.g.
+                      "18:00").
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                    type: string
+                required:
+                - from
+                - to
+                type: object
               threshold:
                 description: Threshold is the platinum price at or below which a notification
                   is sent.
@@ -123,11 +166,16 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastNotifiedAt:
+                description: |-
+                  LastNotifiedAt is the timestamp of the last sent notification.
+                  Used to detect day boundaries and reset the notification state.
+                format: date-time
+                type: string
               lastNotifiedPrice:
                 description: |-
                   LastNotifiedPrice is the platinum price at which the last notification was sent.
-                  Nil means no notification has been sent yet.
-                  A subsequent notification is only sent when the price drops below this value.
+                  Nil means no notification has been sent yet in the current day.
                 type: integer
             type: object
         type: object

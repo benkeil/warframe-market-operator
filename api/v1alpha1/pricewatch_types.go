@@ -76,6 +76,13 @@ type PriceWatchStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Item",type="string",JSONPath=".spec.itemSlug"
+// +kubebuilder:printcolumn:name="Threshold",type="integer",JSONPath=".spec.threshold"
+// +kubebuilder:printcolumn:name="Cheapest",type="integer",JSONPath=".status.cheapestPrice"
+// +kubebuilder:printcolumn:name="Last Notified",type="integer",JSONPath=".status.lastNotifiedPrice"
+// +kubebuilder:printcolumn:name="Notified At",type="date",JSONPath=".status.lastNotifiedAt"
+// +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='PriceSynced')].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // PriceWatch is the Schema for the pricewatches API.
 type PriceWatch struct {
