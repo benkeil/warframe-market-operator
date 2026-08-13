@@ -38,6 +38,10 @@ type stubMarketService struct {
 	platinum int
 }
 
+func (s *stubMarketService) GetItemBySlug(_ context.Context, _ string) (*service.ItemDetail, error) {
+	return nil, nil
+}
+
 func (s *stubMarketService) GetItems(_ context.Context) ([]service.Item, error) {
 	return nil, nil
 }

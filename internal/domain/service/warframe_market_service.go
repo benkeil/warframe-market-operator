@@ -67,6 +67,9 @@ type WarframeMarketService interface {
 	// GetItems returns all tradable items. Use for client-side search by name or slug.
 	GetItems(ctx context.Context) ([]Item, error)
 
+	// GetItemBySlug returns detailed information about a single item by its slug.
+	GetItemBySlug(ctx context.Context, slug string) (*ItemDetail, error)
+
 	// GetOrdersByItem returns all visible orders for an item with optional filtering and sorting.
 	// The slug is the item's URL-friendly identifier (e.g. "ash_prime_set").
 	GetOrdersByItem(ctx context.Context, slug string, filter OrdersFilter) ([]Order, error)
@@ -82,6 +85,20 @@ type Item struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
 	Name string // populated from i18n.en.name
+}
+
+// ItemDetail holds full details for a single item.
+type ItemDetail struct {
+	ID             string   `json:"id"`
+	Slug           string   `json:"slug"`
+	GameRef        string   `json:"gameRef"`
+	Name           string   // populated from i18n.en.name
+	Tags           []string `json:"tags"`
+	SetRoot        bool     `json:"setRoot"`
+	SetParts       []string `json:"setParts"`
+	Ducats         int      `json:"ducats"`
+	ReqMasteryRank int      `json:"reqMasteryRank"`
+	TradingTax     int      `json:"tradingTax"`
 }
 
 // itemAPIResponse is the raw API shape for an item (i18n is locale-keyed).

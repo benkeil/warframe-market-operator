@@ -1,4 +1,4 @@
-package items
+package sets
 
 import (
 	"github.com/spf13/cobra"
@@ -6,12 +6,12 @@ import (
 
 func NewCommand(debug *bool) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "items",
-		Short: "Interact with Warframe Market items",
+		Use:   "sets",
+		Short: "Interact with Warframe prime sets",
 	}
 
-	cmd.AddCommand(newSearchCommand(debug))
 	cmd.AddCommand(newInfoCommand(debug))
+	cmd.AddCommand(newPriceCommand(debug))
 
 	return cmd
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/benkeil/warframe-market-operator/cmd/wfmctl/items"
 	"github.com/benkeil/warframe-market-operator/cmd/wfmctl/orders"
+	"github.com/benkeil/warframe-market-operator/cmd/wfmctl/sets"
 )
 
 func main() {
@@ -22,6 +23,7 @@ func main() {
 
 	root.AddCommand(items.NewCommand(&debug))
 	root.AddCommand(orders.NewCommand(&debug))
+	root.AddCommand(sets.NewCommand(&debug))
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

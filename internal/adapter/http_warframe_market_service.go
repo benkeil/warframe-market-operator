@@ -33,8 +33,48 @@ func NewHttpWarframeMarketService(debug bool) *HttpWarframeMarketService {
 	}
 }
 
-// GetItems fetches all tradable items. Search is done client-side.
-// GET /v2/items
+// GetItemBySlug fetches detailed information about a single item.
+// GET /v2/items/{slug}
+func (s *HttpWarframeMarketService) GetItemBySlug(ctx context.Context, slug string) (*service.ItemDetail, error) {
+	var result apiResponse[itemDetailAPIResponse]
+	if err := s.makeRequest(ctx, fmt.Sprintf("/items/%s", slug), nil, &result); err != nil {
+		return nil, fmt.Errorf("getting item %q: %w", slug, err)
+	}
+	name := result.Data.Slug
+	if locale, ok := result.Data.I18n["en"]; ok {
+		name = locale.Name
+	}
+	return &service.ItemDetail{
+		ID:             result.Data.ID,
+		Slug:           result.Data.Slug,
+		GameRef:        result.Data.GameRef,
+		Name:           name,
+		Tags:           result.Data.Tags,
+		SetRoot:        result.Data.SetRoot,
+		SetParts:       result.Data.SetParts,
+		Ducats:         result.Data.Ducats,
+		ReqMasteryRank: result.Data.ReqMasteryRank,
+		TradingTax:     result.Data.TradingTax,
+	}, nil
+}
+
+type itemDetailAPIResponse struct {
+	ID             string                    `json:"id"`
+	Slug           string                    `json:"slug"`
+	GameRef        string                    `json:"gameRef"`
+	Tags           []string                  `json:"tags"`
+	SetRoot        bool                      `json:"setRoot"`
+	SetParts       []string                  `json:"setParts"`
+	Ducats         int                       `json:"ducats"`
+	ReqMasteryRank int                       `json:"reqMasteryRank"`
+	TradingTax     int                       `json:"tradingTax"`
+	I18n           map[string]ItemI18nLocale `json:"i18n"`
+}
+
+type ItemI18nLocale struct {
+	Name string `json:"name"`
+}
+
 func (s *HttpWarframeMarketService) GetItems(ctx context.Context) ([]service.Item, error) {
 	var result apiResponse[[]service.ItemAPIResponse]
 	if err := s.makeRequest(ctx, "/items", nil, &result); err != nil {
