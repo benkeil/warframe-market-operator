@@ -1,3 +1,12 @@
+## [1.0.3](https://github.com/benkeil/warframe-market-operator/compare/v1.0.2...v1.0.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* pipeline ([826e121](https://github.com/benkeil/warframe-market-operator/commit/826e121784af157ca984177168d1618b5261a404))
+* use dependency step ([ef4b879](https://github.com/benkeil/warframe-market-operator/commit/ef4b879c64679a43d3535713581ce984fe7d44f8))
+* use docker image caching ([aa93b2c](https://github.com/benkeil/warframe-market-operator/commit/aa93b2c85ab04b1ba0386470f50c4296f863410e))
+
 ## [1.0.2](https://github.com/benkeil/warframe-market-operator/compare/v1.0.1...v1.0.2) (2026-08-13)
 
 
