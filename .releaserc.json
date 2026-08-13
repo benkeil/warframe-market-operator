@@ -9,7 +9,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "docker buildx imagetools create -t ghcr.io/${GITHUB_REPOSITORY}:${nextRelease.version} -t ghcr.io/${GITHUB_REPOSITORY}:latest ghcr.io/${GITHUB_REPOSITORY}:sha-${GITHUB_SHA} && make build-installer IMG=ghcr.io/${GITHUB_REPOSITORY}:${nextRelease.version}"
+        "prepareCmd": "docker buildx imagetools create -t ghcr.io/$GITHUB_REPOSITORY:${nextRelease.version} -t ghcr.io/$GITHUB_REPOSITORY:latest ghcr.io/$GITHUB_REPOSITORY:sha-$GITHUB_SHA && make build-installer IMG=ghcr.io/$GITHUB_REPOSITORY:${nextRelease.version}"
       }
     ],
     [
