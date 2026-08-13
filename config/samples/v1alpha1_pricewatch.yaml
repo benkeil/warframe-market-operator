@@ -1,0 +1,10 @@
+apiVersion: warframe.market/v1alpha1
+kind: PriceWatch
+metadata:
+  labels:
+    app.kubernetes.io/name: warframe-market-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: default
+spec:
+  itemSlug: primed_firestorm
+  threshold: 50
