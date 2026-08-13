@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/benkeil/warframe-market-operator/compare/v1.0.0...v1.0.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* restructure workflows ([9265730](https://github.com/benkeil/warframe-market-operator/commit/926573094f59e065427354fe4b8dbc338e5f9b9a))
+
 # 1.0.0 (2026-08-13)
 
 
