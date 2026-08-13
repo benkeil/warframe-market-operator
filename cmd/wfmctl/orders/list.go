@@ -32,7 +32,8 @@ func newListCommand(debug *bool) *cobra.Command {
 
 	cmd.Flags().IntVarP(&limit, "limit", "l", 5, "Maximum number of orders to display")
 	cmd.Flags().StringVarP(&orderType, "type", "t", "sell", "Order type: sell, buy")
-	cmd.Flags().StringSliceVarP(&status, "status", "s", []string{"ingame", "online"}, "User status filter: ingame, online, offline")
+	cmd.Flags().StringSliceVarP(&status, "status", "s",
+		[]string{"ingame", "online"}, "User status filter: ingame, online, offline")
 	cmd.Flags().StringVarP(&platform, "platform", "p", "pc", "Platform: pc, ps4, xbox, switch")
 	cmd.Flags().BoolVar(&noCrossplay, "no-crossplay", false, "Exclude crossplay users from other platforms")
 	cmd.Flags().StringVar(&sortBy, "sort-by", "platinum", "Sort field: platinum, quantity, reputation")
@@ -41,7 +42,11 @@ func newListCommand(debug *bool) *cobra.Command {
 	return cmd
 }
 
-func runList(ctx context.Context, slug string, limit int, orderType string, statuses []string, platform string, crossplay bool, sortBy string, sortDir string, debug bool) error {
+func runList(
+	ctx context.Context, slug string, limit int,
+	orderType string, statuses []string, platform string,
+	crossplay bool, sortBy string, sortDir string, debug bool,
+) error {
 	svc := adapter.NewHttpWarframeMarketService(debug)
 
 	filter := service.OrdersFilter{

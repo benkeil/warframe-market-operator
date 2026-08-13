@@ -120,7 +120,7 @@ func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warfr
 	}
 
 	if status.LastNotifiedAt != nil {
-		ly, lm, ld := status.LastNotifiedAt.Time.Date()
+		ly, lm, ld := status.LastNotifiedAt.Date()
 		ty, tm, td := now.Date()
 		if ly != ty || lm != tm || ld != td {
 			return true, NotifyReasonNewDay
@@ -142,7 +142,7 @@ func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warfr
 func isWithinWindow(t time.Time, from, to string) bool {
 	parseHHMM := func(s string) (int, int) {
 		var h, m int
-		fmt.Sscanf(s, "%d:%d", &h, &m)
+		_, _ = fmt.Sscanf(s, "%d:%d", &h, &m)
 		return h, m
 	}
 	fh, fm := parseHHMM(from)

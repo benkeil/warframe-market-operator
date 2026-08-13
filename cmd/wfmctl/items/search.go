@@ -54,10 +54,10 @@ func runSearch(ctx context.Context, query string, limit int, debug bool) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "SLUG\tNAME")
-	fmt.Fprintln(w, "----\t----")
+	_, _ = fmt.Fprintln(w, "SLUG\tNAME")
+	_, _ = fmt.Fprintln(w, "----\t----")
 	for _, r := range results {
-		fmt.Fprintf(w, "%s\t%s\n", r.slug, r.name)
+		_, _ = fmt.Fprintf(w, "%s\t%s\n", r.slug, r.name)
 	}
 	return w.Flush()
 }
