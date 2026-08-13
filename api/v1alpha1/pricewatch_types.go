@@ -30,6 +30,24 @@ type PriceWatchSpec struct {
 	// Threshold is the platinum price at or below which a notification is sent.
 	// +kubebuilder:validation:Minimum=1
 	Threshold int `json:"threshold"`
+
+	// NotificationWindow restricts notifications to a specific time range each day.
+	// If omitted, notifications are sent at any time.
+	// When a new calendar day begins, the notification state resets so a fresh
+	// notification can be sent regardless of the previous day's price.
+	// +optional
+	NotificationWindow *NotificationWindow `json:"notificationWindow,omitempty"`
+}
+
+// NotificationWindow defines a daily time range during which notifications are allowed.
+type NotificationWindow struct {
+	// From is the start of the window in "HH:MM" format (e.g. "10:00").
+	// +kubebuilder:validation:Pattern=`^([01]\d|2[0-3]):[0-5]\d$`
+	From string `json:"from"`
+
+	// To is the end of the window in "HH:MM" format (e.g. "18:00").
+	// +kubebuilder:validation:Pattern=`^([01]\d|2[0-3]):[0-5]\d$`
+	To string `json:"to"`
 }
 
 // PriceWatchStatus defines the observed state of PriceWatch.
@@ -40,10 +58,14 @@ type PriceWatchStatus struct {
 	CheapestPrice int `json:"cheapestPrice,omitempty"`
 
 	// LastNotifiedPrice is the platinum price at which the last notification was sent.
-	// Nil means no notification has been sent yet.
-	// A subsequent notification is only sent when the price drops below this value.
+	// Nil means no notification has been sent yet in the current day.
 	// +optional
 	LastNotifiedPrice *int `json:"lastNotifiedPrice,omitempty"`
+
+	// LastNotifiedAt is the timestamp of the last sent notification.
+	// Used to detect day boundaries and reset the notification state.
+	// +optional
+	LastNotifiedAt *metav1.Time `json:"lastNotifiedAt,omitempty"`
 
 	// Conditions represent the latest available observations of the PriceWatch state.
 	// +optional

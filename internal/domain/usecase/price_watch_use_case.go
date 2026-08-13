@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -67,27 +68,63 @@ func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframema
 	condition.Message = fmt.Sprintf("Cheapest sell price is %d platinum", cheapest)
 	setCondition(&priceWatch.Status.Conditions, condition)
 
-	if uc.shouldNotify(cheapest, priceWatch.Spec.Threshold, priceWatch.Status.LastNotifiedPrice) {
+	if uc.shouldNotify(cheapest, priceWatch.Spec.Threshold, &priceWatch.Status, priceWatch.Spec.NotificationWindow) {
 		title := fmt.Sprintf("Price alert: %s", priceWatch.Spec.ItemSlug)
 		message := fmt.Sprintf("%d platinum (threshold: %d)", cheapest, priceWatch.Spec.Threshold)
 		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
 			return fmt.Errorf("sending notification: %w", err)
 		}
+		now := metav1.Now()
 		priceWatch.Status.LastNotifiedPrice = &cheapest
+		priceWatch.Status.LastNotifiedAt = &now
 	}
 
 	return nil
 }
 
-// shouldNotify returns true when:
-//   - cheapest is at or below the threshold, AND
-//   - no notification has been sent before (lastNotifiedPrice == nil), OR
-//   - cheapest is strictly below the last notified price (new low).
-func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, lastNotifiedPrice *int) bool {
+// shouldNotify returns true when all of the following hold:
+//   - cheapest is at or below the threshold
+//   - the current time is within the notification window (if configured)
+//   - either no notification has been sent today, or cheapest is strictly below the last notified price
+//
+// When a new calendar day begins, LastNotifiedPrice is treated as nil so a fresh
+// notification is sent even if today's price is higher than yesterday's.
+func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.PriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) bool {
 	if cheapest > threshold {
 		return false
 	}
-	return lastNotifiedPrice == nil || cheapest < *lastNotifiedPrice
+
+	now := time.Now()
+
+	if window != nil && !isWithinWindow(now, window.From, window.To) {
+		return false
+	}
+
+	// New calendar day → reset: allow notifying regardless of previous price.
+	if status.LastNotifiedAt != nil {
+		ly, lm, ld := status.LastNotifiedAt.Time.Date()
+		ty, tm, td := now.Date()
+		if ly != ty || lm != tm || ld != td {
+			return true
+		}
+	}
+
+	return status.LastNotifiedPrice == nil || cheapest < *status.LastNotifiedPrice
+}
+
+// isWithinWindow reports whether t falls within the [from, to] time-of-day range.
+// Both from and to are in "HH:MM" format. The window is treated as same-day only
+// (crossing midnight is not supported).
+func isWithinWindow(t time.Time, from, to string) bool {
+	parseHHMM := func(s string) (int, int) {
+		var h, m int
+		fmt.Sscanf(s, "%d:%d", &h, &m)
+		return h, m
+	}
+	fh, fm := parseHHMM(from)
+	th, tm := parseHHMM(to)
+	cur := t.Hour()*60 + t.Minute()
+	return cur >= fh*60+fm && cur <= th*60+tm
 }
 
 func cheapestPlatinum(orders []service.Order) int {

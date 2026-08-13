@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,7 +55,7 @@ func (r *PriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, useCaseErr
+	return ctrl.Result{RequeueAfter: 5 * time.Minute}, useCaseErr
 }
 
 // SetupWithManager sets up the controller with the Manager.
