@@ -1,0 +1,11 @@
+name: Branch CI
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
