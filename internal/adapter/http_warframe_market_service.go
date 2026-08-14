@@ -16,6 +16,7 @@ import (
 // Warframe Market REST API v2 (https://api.warframe.market/v2).
 type HttpWarframeMarketService struct {
 	baseURL    string
+	baseURLv1  string
 	httpClient *http.Client
 	language   string
 	userAgent  string
@@ -26,6 +27,7 @@ type HttpWarframeMarketService struct {
 func NewHttpWarframeMarketService(debug bool) *HttpWarframeMarketService {
 	return &HttpWarframeMarketService{
 		baseURL:    "https://api.warframe.market/v2",
+		baseURLv1:  "https://api.warframe.market/v1",
 		httpClient: &http.Client{},
 		language:   "en",
 		userAgent:  "warframe-market-operator/1.0",
@@ -173,7 +175,15 @@ type requestHeaders struct {
 }
 
 func (s *HttpWarframeMarketService) makeRequest(ctx context.Context, endpoint string, headers *requestHeaders, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+endpoint, nil)
+	return s.makeRequestToURL(ctx, s.baseURL+endpoint, headers, out)
+}
+
+func (s *HttpWarframeMarketService) makeRequestV1(ctx context.Context, endpoint string, headers *requestHeaders, out any) error {
+	return s.makeRequestToURL(ctx, s.baseURLv1+endpoint, headers, out)
+}
+
+func (s *HttpWarframeMarketService) makeRequestToURL(ctx context.Context, url string, headers *requestHeaders, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)
 	}
@@ -208,7 +218,7 @@ func (s *HttpWarframeMarketService) makeRequest(ctx context.Context, endpoint st
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, endpoint)
+		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
@@ -220,4 +230,113 @@ func (s *HttpWarframeMarketService) makeRequest(ctx context.Context, endpoint st
 type apiResponse[T any] struct {
 	APIVersion string `json:"apiVersion"`
 	Data       T      `json:"data"`
+}
+
+// SearchAuctions searches for riven auctions with the given filter.
+// GET /v1/auctions/search
+func (s *HttpWarframeMarketService) SearchAuctions(ctx context.Context, filter service.AuctionFilter) ([]service.Auction, error) {
+	endpoint := fmt.Sprintf("/auctions/search?type=riven&weapon_url_name=%s&sort_by=%s",
+		filter.WeaponURLName, filter.SortBy)
+	if len(filter.PositiveStats) > 0 {
+		endpoint += "&positive_stats=" + joinStrings(filter.PositiveStats)
+	}
+	if filter.NegativeStats != "" {
+		endpoint += "&negative_stats=" + filter.NegativeStats
+	}
+	if filter.ReRollsMax > 0 {
+		endpoint += fmt.Sprintf("&re_rolls_max=%d", filter.ReRollsMax)
+	}
+
+	var result auctionSearchAPIResponse
+	if err := s.makeRequestV1(ctx, endpoint, nil, &result); err != nil {
+		return nil, fmt.Errorf("searching auctions: %w", err)
+	}
+
+	auctions := make([]service.Auction, 0, len(result.Payload.Auctions))
+	for _, a := range result.Payload.Auctions {
+		status := service.UserStatus(a.Owner.Status)
+		if len(filter.Status) > 0 && !containsStatus(filter.Status, status) {
+			continue
+		}
+		if filter.BuyoutPriceMax > 0 && a.BuyoutPrice > filter.BuyoutPriceMax {
+			continue
+		}
+		attrs := make([]service.RivenAttribute, 0, len(a.Item.Attributes))
+		for _, attr := range a.Item.Attributes {
+			attrs = append(attrs, service.RivenAttribute{
+				URLName:  attr.URLName,
+				Value:    attr.Value,
+				Positive: attr.Positive,
+			})
+		}
+		auctions = append(auctions, service.Auction{
+			ID:           a.ID,
+			BuyoutPrice:  a.BuyoutPrice,
+			IsDirectSell: a.IsDirectSell,
+			Owner: service.AuctionOwner{
+				IngameName: a.Owner.IngameName,
+				Slug:       a.Owner.Slug,
+				Status:     status,
+				Reputation: a.Owner.Reputation,
+			},
+			Item: service.RivenItem{
+				Name:          a.Item.Name,
+				WeaponURLName: a.Item.WeaponURLName,
+				ModRank:       a.Item.ModRank,
+				ReRolls:       a.Item.ReRolls,
+				MasteryLevel:  a.Item.MasteryLevel,
+				Polarity:      a.Item.Polarity,
+				Attributes:    attrs,
+			},
+		})
+	}
+	return auctions, nil
+}
+
+func joinStrings(ss []string) string {
+	result := ""
+	for i, s := range ss {
+		if i > 0 {
+			result += ","
+		}
+		result += s
+	}
+	return result
+}
+
+type auctionSearchAPIResponse struct {
+	Payload struct {
+		Auctions []auctionAPIItem `json:"auctions"`
+	} `json:"payload"`
+}
+
+type auctionAPIItem struct {
+	ID           string          `json:"id"`
+	BuyoutPrice  int             `json:"buyout_price"`
+	IsDirectSell bool            `json:"is_direct_sell"`
+	Owner        auctionOwnerAPI `json:"owner"`
+	Item         rivenItemAPI    `json:"item"`
+}
+
+type auctionOwnerAPI struct {
+	IngameName string `json:"ingame_name"`
+	Slug       string `json:"slug"`
+	Status     string `json:"status"`
+	Reputation int    `json:"reputation"`
+}
+
+type rivenItemAPI struct {
+	Name          string              `json:"name"`
+	WeaponURLName string              `json:"weapon_url_name"`
+	ModRank       int                 `json:"mod_rank"`
+	ReRolls       int                 `json:"re_rolls"`
+	MasteryLevel  int                 `json:"mastery_level"`
+	Polarity      string              `json:"polarity"`
+	Attributes    []rivenAttributeAPI `json:"attributes"`
+}
+
+type rivenAttributeAPI struct {
+	URLName  string  `json:"url_name"`
+	Value    float64 `json:"value"`
+	Positive bool    `json:"positive"`
 }

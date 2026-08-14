@@ -63,9 +63,9 @@ func runPrice(ctx context.Context, slug string, platform string, crossplay bool,
 		if p.CheapestPlatinum == 0 {
 			totalStr = "N/A"
 		}
-		table.Append([]string{p.Part.Name, fmt.Sprintf("%d", p.Part.Count), cheapestStr, totalStr})
+		_ = table.Append([]string{p.Part.Name, fmt.Sprintf("%d", p.Part.Count), cheapestStr, totalStr})
 	}
-	table.Render()
+	_ = table.Render()
 
 	fmt.Printf("\nTotal: %d platinum\n", result.TotalPlatinum)
 	return nil

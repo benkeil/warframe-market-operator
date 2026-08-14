@@ -151,3 +151,55 @@ type exportIngredient struct {
 	ItemType  string `json:"ItemType"`
 	ItemCount int    `json:"ItemCount"`
 }
+
+// GetWeaponByGameRef returns weapon metadata for a given gameRef (uniqueName) from the DE public export.
+func (s *HttpWarframeExportService) GetWeaponByGameRef(ctx context.Context, gameRef string) (*service.WeaponInfo, error) {
+	filename, err := s.resolveFilename(ctx, "ExportWeapons_en.json")
+	if err != nil {
+		return nil, err
+	}
+	var raw exportWeaponsResponse
+	if err := s.fetchJSON(ctx, fmt.Sprintf("%s/%s", exportBaseURL, filename), &raw); err != nil {
+		return nil, fmt.Errorf("fetching weapons export: %w", err)
+	}
+	for _, w := range raw.ExportWeapons {
+		if w.UniqueName == gameRef {
+			return &service.WeaponInfo{
+				Disposition: w.OmegaAttenuation,
+				Category:    w.ProductCategory,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+func (s *HttpWarframeExportService) GetWeaponByName(ctx context.Context, name string) (*service.WeaponInfo, error) {
+	filename, err := s.resolveFilename(ctx, "ExportWeapons_en.json")
+	if err != nil {
+		return nil, err
+	}
+	var raw exportWeaponsResponse
+	if err := s.fetchJSON(ctx, fmt.Sprintf("%s/%s", exportBaseURL, filename), &raw); err != nil {
+		return nil, fmt.Errorf("fetching weapons export: %w", err)
+	}
+	nameLower := strings.ToLower(name)
+	for _, w := range raw.ExportWeapons {
+		if strings.ToLower(w.Name) == nameLower {
+			return &service.WeaponInfo{
+				Disposition: w.OmegaAttenuation,
+				Category:    w.ProductCategory,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
+type exportWeaponsResponse struct {
+	ExportWeapons []exportWeaponDE `json:"ExportWeapons"`
+}
+
+type exportWeaponDE struct {
+	Name             string  `json:"name"`
+	UniqueName       string  `json:"uniqueName"`
+	ProductCategory  string  `json:"productCategory"`
+	OmegaAttenuation float64 `json:"omegaAttenuation"`
+}

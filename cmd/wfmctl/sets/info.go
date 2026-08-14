@@ -39,8 +39,8 @@ func runInfo(ctx context.Context, slug string, debug bool) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.Header([]string{"Part", "Slug", "Count"})
 	for _, p := range info.Parts {
-		table.Append([]string{p.Name, p.Slug, fmt.Sprintf("%d", p.Count)})
+		_ = table.Append([]string{p.Name, p.Slug, fmt.Sprintf("%d", p.Count)})
 	}
-	table.Render()
+	_ = table.Render()
 	return nil
 }

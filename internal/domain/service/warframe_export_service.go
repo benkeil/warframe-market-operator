@@ -23,4 +23,20 @@ type WarframeExportService interface {
 	// GetRecipeByResultType returns the recipe that produces the given item uniqueName.
 	// Returns nil if no recipe is found.
 	GetRecipeByResultType(ctx context.Context, resultType string) (*Recipe, error)
+
+	// GetWeaponByGameRef returns weapon metadata (disposition, category) for a given gameRef.
+	// Returns nil if the weapon is not found.
+	GetWeaponByGameRef(ctx context.Context, gameRef string) (*WeaponInfo, error)
+
+	// GetWeaponByName returns weapon metadata (disposition, category) by display name (case-insensitive).
+	// Returns nil if the weapon is not found.
+	GetWeaponByName(ctx context.Context, name string) (*WeaponInfo, error)
+}
+
+// WeaponInfo holds riven-relevant metadata for a weapon.
+type WeaponInfo struct {
+	// Disposition is the riven disposition multiplier (omegaAttenuation), 0.5–1.55.
+	Disposition float64
+	// Category is the product category (e.g. "Melee", "Pistols", "Primary", "Shotguns").
+	Category string
 }

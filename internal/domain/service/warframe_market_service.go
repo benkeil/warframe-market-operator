@@ -78,6 +78,9 @@ type WarframeMarketService interface {
 	// restricted to currently online users. The slug is the item's URL-friendly identifier.
 	// Platform and Crossplay from filter are sent as request headers.
 	GetTopOrdersByItem(ctx context.Context, slug string, filter OrdersFilter) (*TopOrders, error)
+
+	// SearchAuctions searches for riven auctions matching the given filter.
+	SearchAuctions(ctx context.Context, filter AuctionFilter) ([]Auction, error)
 }
 
 // Item represents a tradable item on Warframe Market.
@@ -136,4 +139,57 @@ type OrderUser struct {
 	Platform   Platform   `json:"platform"`
 	Crossplay  bool       `json:"crossplay"`
 	Reputation int        `json:"reputation"`
+}
+
+// AuctionFilter holds search parameters for riven auctions.
+type AuctionFilter struct {
+	// WeaponURLName is the weapon slug (e.g. "falcor").
+	WeaponURLName string
+	// PositiveStats filters for auctions that include these stats as positives.
+	PositiveStats []string
+	// NegativeStats filters for auctions by negative stat: "" = any, "has" = must have one, "none" = no negative.
+	NegativeStats string
+	// SortBy controls ordering. Defaults to "price_asc".
+	SortBy string
+	// ReRollsMax limits results to rivens with at most this many re-rolls. 0 means no limit.
+	ReRollsMax int
+	// BuyoutPriceMax limits results to auctions with a buyout price at or below this value. 0 means no limit.
+	BuyoutPriceMax int
+	// Status filters auctions by the owner's online status. Nil means all statuses.
+	Status []UserStatus
+}
+
+// Auction represents a riven auction on Warframe Market.
+type Auction struct {
+	ID           string
+	BuyoutPrice  int
+	IsDirectSell bool
+	Owner        AuctionOwner
+	Item         RivenItem
+}
+
+// AuctionOwner holds information about the auction owner.
+type AuctionOwner struct {
+	IngameName string
+	Slug       string
+	Status     UserStatus
+	Reputation int
+}
+
+// RivenItem holds details about a riven mod in an auction.
+type RivenItem struct {
+	Name          string
+	WeaponURLName string
+	ModRank       int
+	ReRolls       int
+	MasteryLevel  int
+	Polarity      string
+	Attributes    []RivenAttribute
+}
+
+// RivenAttribute is a single stat on a riven mod.
+type RivenAttribute struct {
+	URLName  string
+	Value    float64
+	Positive bool
 }

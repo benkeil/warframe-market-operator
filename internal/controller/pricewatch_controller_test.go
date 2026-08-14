@@ -56,6 +56,10 @@ func (s *stubMarketService) GetTopOrdersByItem(_ context.Context, _ string, _ se
 	}, nil
 }
 
+func (s *stubMarketService) SearchAuctions(_ context.Context, _ service.AuctionFilter) ([]service.Auction, error) {
+	return nil, nil
+}
+
 // stubNotificationService is a test double that records sent notifications.
 type stubNotificationService struct {
 	sent []string
