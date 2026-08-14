@@ -217,6 +217,11 @@ func (in *RivenPriceWatchSpec) DeepCopyInto(out *RivenPriceWatchSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.PlayerStatus != nil {
+		in, out := &in.PlayerStatus, &out.PlayerStatus
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.NotificationWindow != nil {
 		in, out := &in.NotificationWindow, &out.NotificationWindow
 		*out = new(NotificationWindow)
