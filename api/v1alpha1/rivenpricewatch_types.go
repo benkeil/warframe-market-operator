@@ -54,6 +54,10 @@ type RivenPriceWatchSpec struct {
 	// +kubebuilder:validation:Maximum=100
 	MinRollQuality int `json:"minRollQuality,omitempty"`
 
+	// BuyoutOnly restricts results to direct-sell auctions, excluding bidding-only listings.
+	// +optional
+	BuyoutOnly bool `json:"buyoutOnly,omitempty"`
+
 	// Threshold is the platinum price at or below which a notification is sent.
 	// +kubebuilder:validation:Minimum=1
 	Threshold int `json:"threshold"`

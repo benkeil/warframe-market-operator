@@ -258,6 +258,9 @@ func (s *HttpWarframeMarketService) SearchAuctions(ctx context.Context, filter s
 		if len(filter.Status) > 0 && !containsStatus(filter.Status, status) {
 			continue
 		}
+		if filter.BuyoutOnly && !a.IsDirectSell {
+			continue
+		}
 		if filter.BuyoutPriceMax > 0 && a.BuyoutPrice > filter.BuyoutPriceMax {
 			continue
 		}

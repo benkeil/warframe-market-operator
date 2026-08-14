@@ -46,6 +46,7 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 		WeaponURLName: rpw.Spec.WeaponSlug,
 		PositiveStats: rpw.Spec.PositiveStats,
 		SortBy:        "price_asc",
+		BuyoutOnly:    rpw.Spec.BuyoutOnly,
 		Status:        statusFilter,
 	}
 	if rpw.Spec.NegativeStats != "" {

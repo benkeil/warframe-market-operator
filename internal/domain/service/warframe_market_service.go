@@ -155,6 +155,8 @@ type AuctionFilter struct {
 	ReRollsMax int
 	// BuyoutPriceMax limits results to auctions with a buyout price at or below this value. 0 means no limit.
 	BuyoutPriceMax int
+	// BuyoutOnly limits results to direct-sell auctions (excludes bidding-only listings).
+	BuyoutOnly bool
 	// Status filters auctions by the owner's online status. Nil means all statuses.
 	Status []UserStatus
 }

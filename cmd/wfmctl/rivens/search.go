@@ -23,6 +23,7 @@ func newSearchCommand(debug *bool) *cobra.Command {
 	var reRollsMax int
 	var maxPrice int
 	var statusFilter []string
+	var buyoutOnly bool
 
 	cmd := &cobra.Command{
 		Use:   "search <weapon-slug>",
@@ -33,7 +34,7 @@ func newSearchCommand(debug *bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSearch(
 				cmd.Context(), args[0],
-				positiveStats, negativeStats, sortBy, reRollsMax, maxPrice, statusFilter,
+				positiveStats, negativeStats, sortBy, reRollsMax, maxPrice, statusFilter, buyoutOnly,
 				*debug,
 			)
 		},
@@ -47,13 +48,14 @@ func newSearchCommand(debug *bool) *cobra.Command {
 	cmd.Flags().IntVar(&reRollsMax, "re-rolls-max", 0, "Maximum number of re-rolls (0 = no limit)")
 	cmd.Flags().IntVar(&maxPrice, "max-price", 0, "Maximum buyout price in platinum (0 = no limit)")
 	cmd.Flags().StringSliceVar(&statusFilter, "status", nil, "Filter by owner status: ingame, online, offline")
+	cmd.Flags().BoolVar(&buyoutOnly, "buyout-only", false, "Only show direct-sell auctions (exclude bidding-only listings)")
 	return cmd
 }
 
 func runSearch(
 	ctx context.Context,
 	weaponSlug string, positiveStats []string, negativeStats string, sortBy string, reRollsMax int, maxPrice int,
-	statusFilter []string,
+	statusFilter []string, buyoutOnly bool,
 	debug bool,
 ) error {
 	marketSvc := adapter.NewHttpWarframeMarketService(debug)
@@ -71,6 +73,7 @@ func runSearch(
 		SortBy:         sortBy,
 		ReRollsMax:     reRollsMax,
 		BuyoutPriceMax: maxPrice,
+		BuyoutOnly:     buyoutOnly,
 		Status:         statuses,
 	}
 
