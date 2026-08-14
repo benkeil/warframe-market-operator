@@ -9,6 +9,7 @@ spec:
   weaponSlug: glaive
   maxReRolls: 1
   threshold: 20
+  buyoutOnly: true
   notificationWindow:
     from: "08:00"
     to: "22:00"

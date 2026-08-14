@@ -59,11 +59,11 @@ func (r *RivenPriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if useCaseErr != nil {
 		log.Error(useCaseErr, "reconcile failed")
-	} else {
-		log.Info("reconcile successful")
+		return ctrl.Result{}, useCaseErr
 	}
 
-	return ctrl.Result{RequeueAfter: 5 * time.Minute}, useCaseErr
+	log.Info("reconcile successful")
+	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

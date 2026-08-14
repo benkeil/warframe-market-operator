@@ -64,6 +64,10 @@ spec:
           spec:
             description: RivenPriceWatchSpec defines the desired state of RivenPriceWatch.
             properties:
+              buyoutOnly:
+                description: BuyoutOnly restricts results to direct-sell auctions,
+                  excluding bidding-only listings.
+                type: boolean
               maxReRolls:
                 description: MaxReRolls limits results to rivens with at most this
                   many re-rolls. 0 means no limit.

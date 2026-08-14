@@ -8,6 +8,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/benkeil/warframe-market-operator/internal/domain/service"
 )
@@ -18,17 +21,20 @@ type HttpWarframeMarketService struct {
 	baseURL    string
 	baseURLv1  string
 	httpClient *http.Client
+	limiter    *rate.Limiter
 	language   string
 	userAgent  string
 	debug      bool
 }
 
 // NewHttpWarframeMarketService creates a new HttpWarframeMarketService.
+// The Warframe Market API allows 3 requests per second.
 func NewHttpWarframeMarketService(debug bool) *HttpWarframeMarketService {
 	return &HttpWarframeMarketService{
 		baseURL:    "https://api.warframe.market/v2",
 		baseURLv1:  "https://api.warframe.market/v1",
 		httpClient: &http.Client{},
+		limiter:    rate.NewLimiter(rate.Every(time.Second), 1),
 		language:   "en",
 		userAgent:  "warframe-market-operator/1.0",
 		debug:      debug,
@@ -183,6 +189,10 @@ func (s *HttpWarframeMarketService) makeRequestV1(ctx context.Context, endpoint 
 }
 
 func (s *HttpWarframeMarketService) makeRequestToURL(ctx context.Context, url string, headers *requestHeaders, out any) error {
+	if err := s.limiter.Wait(ctx); err != nil {
+		return fmt.Errorf("rate limiter: %w", err)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)

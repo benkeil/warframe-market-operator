@@ -76,11 +76,11 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 
 	if len(auctions) == 0 {
 		log.Info("no auctions found")
-		condition.Status = metav1.ConditionFalse
+		condition.Status = metav1.ConditionTrue
 		condition.Reason = "NoAuctions"
 		condition.Message = fmt.Sprintf("No auctions found for weapon %q", rpw.Spec.WeaponSlug)
 		setCondition(&rpw.Status.Conditions, condition)
-		return fmt.Errorf("no auctions found for weapon %q", rpw.Spec.WeaponSlug)
+		return nil
 	}
 
 	weapon, err := uc.exportService.GetWeaponByName(ctx, rpw.Spec.WeaponSlug)
@@ -106,7 +106,7 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 
 	if best == nil {
 		log.Info("no auction meets minimum roll quality", "minRollQuality", rpw.Spec.MinRollQuality)
-		condition.Status = metav1.ConditionFalse
+		condition.Status = metav1.ConditionTrue
 		condition.Reason = "QualityThresholdNotMet"
 		condition.Message = fmt.Sprintf("No auction meets minimum roll quality of %d%%", rpw.Spec.MinRollQuality)
 		setCondition(&rpw.Status.Conditions, condition)
