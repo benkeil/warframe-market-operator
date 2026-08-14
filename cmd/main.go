@@ -211,6 +211,7 @@ func main() {
 		Topic:     getEnv("NTFY_TOPIC", "wmo--price-watch"),
 		Token:     os.Getenv("NTFY_TOKEN"),
 	})
+
 	itemPriceWatchUseCase := usecase.NewItemPriceWatchUseCase(marketService, notificationService)
 	rivenPriceWatchUseCase := usecase.NewRivenPriceWatchUseCase(marketService, exportService, notificationService)
 

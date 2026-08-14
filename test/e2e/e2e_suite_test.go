@@ -17,35 +17,29 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	tck3s "github.com/testcontainers/testcontainers-go/modules/k3s"
 
 	"github.com/benkeil/warframe-market-operator/test/utils"
 )
 
 var (
-	// Optional Environment Variables:
-	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
-	// These variables are useful if CertManager is already installed, avoiding
-	// re-installation and conflicts.
-	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
-	isCertManagerAlreadyInstalled = false
-
-	// projectImage is the name of the image which will be build and loaded
-	// with the code source changes to be tested.
-	projectImage = "example.com/warframe-market-operator:v0.0.1"
+	projectImage   = "example.com/warframe-market-operator:v0.0.1"
+	k3sContainer   *tck3s.K3sContainer
+	kubeconfigFile string
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
-// temporary environment to validate project changes with the purposed to be used in CI jobs.
-// The default setup requires Kind, builds/loads the Manager Docker image locally, and installs
-// CertManager.
+// temporary environment via a k3s Testcontainer — no external cluster or Kind required.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Starting warframe-market-operator integration test suite\n")
@@ -53,37 +47,133 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	ctx := context.Background()
+
 	By("building the manager(Operator) image")
-	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
+	cmd := exec.Command("just", fmt.Sprintf("img=%s", projectImage), "docker-build")
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
 
-	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image on Kind")
-	err = utils.LoadImageToKindClusterWithName(projectImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+	By("starting k3s via Testcontainers")
+	k3sContainer, err = tck3s.Run(ctx, "rancher/k3s:v1.33.13-k3s1")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to start k3s container")
 
-	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
-	// To prevent errors when tests run in environments with CertManager already installed,
-	// we check for its presence before execution.
-	// Setup CertManager before the suite if not skipped and if not already installed
-	if !skipCertManagerInstall {
-		By("checking if cert manager is installed already")
-		isCertManagerAlreadyInstalled = utils.IsCertManagerCRDsInstalled()
-		if !isCertManagerAlreadyInstalled {
-			_, _ = fmt.Fprintf(GinkgoWriter, "Installing CertManager...\n")
-			Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
-		} else {
-			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
-		}
-	}
+	By("loading the manager image into k3s")
+	err = k3sContainer.LoadImages(ctx, projectImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load image into k3s")
+
+	By("writing kubeconfig to temp file")
+	kubeConfigYAML, err := k3sContainer.GetKubeConfig(ctx)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to get kubeconfig from k3s")
+	tmpFile, err := os.CreateTemp("", "wmo-e2e-kubeconfig-*.yaml")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	_, err = tmpFile.Write(kubeConfigYAML)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, tmpFile.Close()).To(Succeed())
+	kubeconfigFile = tmpFile.Name()
+	Expect(os.Setenv("KUBECONFIG", kubeconfigFile)).To(Succeed())
+
+	// By("installing CertManager")
+	// Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
+
+	By("creating manager namespace")
+	cmd = exec.Command("kubectl", "create", "ns", namespace)
+	_, _ = utils.Run(cmd)
+
+	By("labeling the namespace to enforce the restricted security policy")
+	cmd = exec.Command("kubectl", "label", "--overwrite", "ns", namespace,
+		"pod-security.kubernetes.io/enforce=restricted")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
+
+	By("installing CRDs")
+	cmd = exec.Command("just", "install")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+	By("deploying the controller-manager")
+	cmd = exec.Command("just", fmt.Sprintf("img=%s", projectImage), "deploy")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
+	By("setting test notification topic")
+	cmd = exec.Command("kubectl", "set", "env", "deployment/warframe-market-operator-controller-manager",
+		"NTFY_TOPIC=wmo--price-watch-test", "-n", namespace)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set NTFY_TOPIC")
+
+	By("waiting for the controller-manager pod to be running")
+	Eventually(func(g Gomega) {
+		cmd := exec.Command("kubectl", "get",
+			"pods", "-l", "control-plane=controller-manager",
+			"-o", "go-template={{ range .items }}"+
+				"{{ if not .metadata.deletionTimestamp }}"+
+				"{{ .metadata.name }}"+
+				"{{ \"\\n\" }}{{ end }}{{ end }}",
+			"-n", namespace,
+		)
+		podOutput, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		podNames := utils.GetNonEmptyLines(podOutput)
+		g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod running")
+		controllerPodName = podNames[0]
+
+		cmd = exec.Command("kubectl", "get",
+			"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
+			"-n", namespace,
+		)
+		output, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(output).To(Equal("Running"))
+	}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+	By("creating metrics ClusterRoleBinding")
+	clusterRoleBindingYAML := fmt.Sprintf(`
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: %s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: warframe-market-operator-metrics-reader
+subjects:
+- kind: ServiceAccount
+  name: %s
+  namespace: %s
+`, metricsRoleBindingName, serviceAccountName, namespace)
+	cmd = exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(clusterRoleBindingYAML)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create metrics ClusterRoleBinding")
 })
 
 var _ = AfterSuite(func() {
-	// Teardown CertManager after the suite if not skipped and if it was not already installed
-	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
-		utils.UninstallCertManager()
+	ctx := context.Background()
+
+	By("cleaning up the curl pod for metrics")
+	cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace, "--ignore-not-found")
+	_, _ = utils.Run(cmd)
+
+	By("cleaning up metrics ClusterRoleBinding")
+	cmd = exec.Command("kubectl", "delete", "clusterrolebinding", metricsRoleBindingName, "--ignore-not-found")
+	_, _ = utils.Run(cmd)
+
+	By("undeploying the controller-manager")
+	cmd = exec.Command("just", "undeploy")
+	_, _ = utils.Run(cmd)
+
+	By("uninstalling CRDs")
+	cmd = exec.Command("just", "uninstall")
+	_, _ = utils.Run(cmd)
+
+	By("terminating k3s container")
+	if k3sContainer != nil {
+		_ = k3sContainer.Terminate(ctx)
+	}
+
+	By("removing kubeconfig temp file")
+	if kubeconfigFile != "" {
+		_ = os.Remove(kubeconfigFile)
 	}
 })
