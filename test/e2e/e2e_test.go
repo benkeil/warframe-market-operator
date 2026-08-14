@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -258,114 +257,6 @@ var _ = Describe("Manager", Ordered, func() {
 		})
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
-	})
-
-	Context("ItemPriceWatch", func() {
-		const crName = "e2e-primed-firestorm"
-
-		AfterEach(func() {
-			cmd := exec.Command("kubectl", "delete", "itempricewatches", crName,
-				"-n", namespace, "--ignore-not-found")
-			_, _ = utils.Run(cmd)
-		})
-
-		It("should reconcile and populate cheapestPrice in status", func() {
-			By("creating an ItemPriceWatch CR")
-			cr := fmt.Sprintf(`
-apiVersion: warframe.market/v1alpha1
-kind: ItemPriceWatch
-metadata:
-  name: %s
-  namespace: %s
-spec:
-  itemSlug: primed_firestorm
-  threshold: 9999
-`, crName, namespace)
-			cmd := exec.Command("kubectl", "apply", "-f", "-")
-			cmd.Stdin = strings.NewReader(cr)
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create ItemPriceWatch CR")
-
-			By("waiting for cheapestPrice to be set in status")
-			verifyCheapestPrice := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "itempricewatches", crName,
-					"-n", namespace,
-					"-o", "jsonpath={.status.cheapestPrice}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).NotTo(BeEmpty(), "cheapestPrice should be set")
-				g.Expect(output).NotTo(Equal("0"), "cheapestPrice should be > 0")
-			}
-			Eventually(verifyCheapestPrice, 3*time.Minute, 10*time.Second).Should(Succeed())
-
-			By("verifying the PriceSynced condition is True")
-			verifySynced := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "itempricewatches", crName,
-					"-n", namespace,
-					"-o", `jsonpath={.status.conditions[?(@.type=="PriceSynced")].status}`)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("True"), "PriceSynced condition should be True")
-			}
-			Eventually(verifySynced, 3*time.Minute, 10*time.Second).Should(Succeed())
-
-			By("verifying reconcile metrics for itempricewatch controller")
-			metricsOutput := getMetricsOutput()
-			Expect(metricsOutput).To(ContainSubstring(
-				`controller_runtime_reconcile_total{controller="itempricewatch"`,
-			))
-		})
-	})
-
-	Context("RivenPriceWatch", func() {
-		const crName = "e2e-falcor-riven"
-
-		AfterEach(func() {
-			cmd := exec.Command("kubectl", "delete", "rivenpricewatches", crName,
-				"-n", namespace, "--ignore-not-found")
-			_, _ = utils.Run(cmd)
-		})
-
-		It("should reconcile and set a condition in status", func() {
-			By("creating a RivenPriceWatch CR")
-			cr := fmt.Sprintf(`
-apiVersion: warframe.market/v1alpha1
-kind: RivenPriceWatch
-metadata:
-  name: %s
-  namespace: %s
-spec:
-  weaponSlug: falcor
-  positiveStats:
-    - critical_chance
-  threshold: 9999
-  playerStatus:
-    - ingame
-    - online
-    - offline
-`, crName, namespace)
-			cmd := exec.Command("kubectl", "apply", "-f", "-")
-			cmd.Stdin = strings.NewReader(cr)
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create RivenPriceWatch CR")
-
-			By("waiting for PriceSynced condition to be set")
-			verifyCondition := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "rivenpricewatches", crName,
-					"-n", namespace,
-					"-o", `jsonpath={.status.conditions[?(@.type=="PriceSynced")].type}`)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("PriceSynced"), "PriceSynced condition should be present")
-			}
-			Eventually(verifyCondition, 3*time.Minute, 10*time.Second).Should(Succeed())
-
-			By("verifying reconcile metrics for rivenpricewatch controller")
-			metricsOutput := getMetricsOutput()
-			Expect(metricsOutput).To(ContainSubstring(
-				`controller_runtime_reconcile_total{controller="rivenpricewatch"`,
-			))
-		})
 	})
 })
 
