@@ -87,6 +87,8 @@ cli-build: fmt vet
 cli-install: fmt vet
     go install ./cmd/wfmctl
 
+cli: cli-build cli-install
+
 # Run controller from host
 run: manifests generate fmt vet
     go run ./cmd/main.go

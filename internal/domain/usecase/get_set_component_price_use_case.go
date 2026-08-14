@@ -8,11 +8,19 @@ import (
 	"github.com/benkeil/warframe-market-operator/internal/domain/service"
 )
 
-// PartPrice holds the cheapest sell price found for a set part and the total cost (price × count).
+// BuyOrderLine is one line in the buy plan for a set part: buy Quantity units from Seller at Price each.
+type BuyOrderLine struct {
+	Seller   service.OrderUser
+	Quantity int
+	Price    int
+	Subtotal int
+}
+
+// PartPrice holds the buy plan for one set part and the total cost.
 type PartPrice struct {
-	Part             SetPart
-	CheapestPlatinum int
-	TotalPlatinum    int
+	Part      SetPart
+	BuyOrders []BuyOrderLine
+	Total     int
 }
 
 // SetComponentPrice is the result of pricing a set via individual components.
@@ -38,26 +46,39 @@ func NewGetSetComponentPriceUseCase(getSetInfo *GetSetInfoUseCase, marketSvc ser
 	}
 }
 
-// Execute prices all components of the given set and returns the totals.
+// Execute prices all components of the given set and returns a buy plan per part.
 func (uc *GetSetComponentPriceUseCase) Execute(ctx context.Context, slug string, filter service.OrdersFilter) (*SetComponentPrice, error) {
 	info, err := uc.getSetInfo.Execute(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
 
+	sellType := service.OrderTypeSell
+	partFilter := service.OrdersFilter{
+		Platform:      filter.Platform,
+		Crossplay:     filter.Crossplay,
+		Type:          &sellType,
+		Status:        []service.UserStatus{service.UserStatusIngame, service.UserStatusOnline},
+		SortBy:        service.SortByPlatinum,
+		SortDirection: service.SortAsc,
+	}
+
 	result := &SetComponentPrice{SetName: info.Name, SetSlug: info.Slug}
 
 	for _, part := range info.Parts {
-		orders, err := uc.marketService.GetTopOrdersByItem(ctx, part.Slug, filter)
+		orders, err := uc.marketService.GetOrdersByItem(ctx, part.Slug, partFilter)
 		if err != nil {
 			return nil, fmt.Errorf("fetching orders for %q: %w", part.Slug, err)
 		}
-		cheapest := cheapestSellPrice(orders.Sell)
-		total := cheapest * part.Count
+		lines := buildBuyPlan(orders, part.Count)
+		total := 0
+		for _, l := range lines {
+			total += l.Subtotal
+		}
 		result.Parts = append(result.Parts, PartPrice{
-			Part:             part,
-			CheapestPlatinum: cheapest,
-			TotalPlatinum:    total,
+			Part:      part,
+			BuyOrders: lines,
+			Total:     total,
 		})
 		result.TotalPlatinum += total
 	}
@@ -65,13 +86,27 @@ func (uc *GetSetComponentPriceUseCase) Execute(ctx context.Context, slug string,
 	return result, nil
 }
 
-// cheapestSellPrice returns the lowest platinum value among the given sell orders.
-// Returns 0 if the slice is empty.
-func cheapestSellPrice(orders []service.Order) int {
-	if len(orders) == 0 {
-		return 0
-	}
-	return slices.MinFunc(orders, func(a, b service.Order) int {
+// buildBuyPlan greedily fills `need` units from the cheapest sell orders.
+func buildBuyPlan(orders []service.Order, need int) []BuyOrderLine {
+	sorted := slices.SortedFunc(slices.Values(orders), func(a, b service.Order) int {
 		return a.Platinum - b.Platinum
-	}).Platinum
+	})
+	var lines []BuyOrderLine
+	for _, o := range sorted {
+		if need <= 0 {
+			break
+		}
+		take := o.Quantity
+		if take > need {
+			take = need
+		}
+		lines = append(lines, BuyOrderLine{
+			Seller:   o.User,
+			Quantity: take,
+			Price:    o.Platinum,
+			Subtotal: take * o.Platinum,
+		})
+		need -= take
+	}
+	return lines
 }

@@ -50,22 +50,31 @@ func runPrice(ctx context.Context, slug string, platform string, crossplay bool,
 		return err
 	}
 
-	fmt.Printf("Set: %s (%s)\n\n", result.SetName, result.SetSlug)
+	fmt.Printf("Set: %s (%s)\n", result.SetName, result.SetSlug)
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.Header([]string{"Part", "Count", "Cheapest (p)", "Total (p)"})
 	for _, p := range result.Parts {
-		cheapestStr := fmt.Sprintf("%d", p.CheapestPlatinum)
-		if p.CheapestPlatinum == 0 {
-			cheapestStr = "N/A"
+		fmt.Println()
+		if len(p.BuyOrders) == 0 {
+			fmt.Printf("  %s  [%s]  —  no sell orders found\n", p.Part.Name, p.Part.Slug)
+			continue
 		}
-		totalStr := fmt.Sprintf("%d", p.TotalPlatinum)
-		if p.CheapestPlatinum == 0 {
-			totalStr = "N/A"
+		fmt.Printf("  %s  [%s]  (x%d)\n", p.Part.Name, p.Part.Slug, p.Part.Count)
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"Status", "Player", "Price (p)", "Qty", "Subtotal (p)"})
+		for _, l := range p.BuyOrders {
+			_ = table.Append([]string{
+				string(l.Seller.Status),
+				l.Seller.IngameName,
+				fmt.Sprintf("%d", l.Price),
+				fmt.Sprintf("%d", l.Quantity),
+				fmt.Sprintf("%d", l.Subtotal),
+			})
 		}
-		_ = table.Append([]string{p.Part.Name, fmt.Sprintf("%d", p.Part.Count), cheapestStr, totalStr})
+		_ = table.Render()
+		if p.Part.Count > 1 {
+			fmt.Printf("  Part total: %d platinum\n", p.Total)
+		}
 	}
-	_ = table.Render()
 
 	fmt.Printf("\nTotal: %d platinum\n", result.TotalPlatinum)
 	return nil
