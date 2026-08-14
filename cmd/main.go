@@ -205,19 +205,29 @@ func main() {
 	}
 
 	marketService := adapter.NewHttpWarframeMarketService(false)
+	exportService := adapter.NewHttpWarframeExportService()
 	notificationService := adapter.NewNtfyNotificationService(adapter.NtfyConfig{
 		ServerURL: "https://ntfy.sh",
 		Topic:     getEnv("NTFY_TOPIC", "wmo--price-watch"),
 		Token:     os.Getenv("NTFY_TOKEN"),
 	})
-	priceWatchUseCase := usecase.NewPriceWatchUseCase(marketService, notificationService)
+	itemPriceWatchUseCase := usecase.NewItemPriceWatchUseCase(marketService, notificationService)
+	rivenPriceWatchUseCase := usecase.NewRivenPriceWatchUseCase(marketService, exportService, notificationService)
 
-	if err := (&controller.PriceWatchReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		PriceWatchUseCase: priceWatchUseCase,
+	if err := (&controller.ItemPriceWatchReconciler{
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		ItemPriceWatchUseCase: itemPriceWatchUseCase,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PriceWatch")
+		setupLog.Error(err, "unable to create controller", "controller", "ItemPriceWatch")
+		os.Exit(1)
+	}
+	if err := (&controller.RivenPriceWatchReconciler{
+		Client:                 mgr.GetClient(),
+		Scheme:                 mgr.GetScheme(),
+		RivenPriceWatchUseCase: rivenPriceWatchUseCase,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RivenPriceWatch")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

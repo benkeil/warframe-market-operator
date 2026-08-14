@@ -3,6 +3,8 @@
 # It should be run by config/default
 resources:
 - bases/warframe.market_pricewatches.yaml
+- bases/warframe.market_itempricewatches.yaml
+- bases/warframe.market_rivenpricewatches.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

@@ -7,7 +7,8 @@ rules:
 - apiGroups:
   - warframe.market
   resources:
-  - pricewatches
+  - itempricewatches
+  - rivenpricewatches
   verbs:
   - create
   - delete
@@ -19,13 +20,15 @@ rules:
 - apiGroups:
   - warframe.market
   resources:
-  - pricewatches/finalizers
+  - itempricewatches/finalizers
+  - rivenpricewatches/finalizers
   verbs:
   - update
 - apiGroups:
   - warframe.market
   resources:
-  - pricewatches/status
+  - itempricewatches/status
+  - rivenpricewatches/status
   verbs:
   - get
   - patch

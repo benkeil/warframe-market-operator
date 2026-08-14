@@ -1,0 +1,213 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: rivenpricewatches.warframe.market
+spec:
+  group: warframe.market
+  names:
+    kind: RivenPriceWatch
+    listKind: RivenPriceWatchList
+    plural: rivenpricewatches
+    singular: rivenpricewatch
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.weaponSlug
+      name: Weapon
+      type: string
+    - jsonPath: .spec.threshold
+      name: Threshold
+      type: integer
+    - jsonPath: .status.cheapestPrice
+      name: Cheapest
+      type: integer
+    - jsonPath: .status.bestRollQuality
+      name: Roll Quality
+      type: integer
+    - jsonPath: .status.lastNotifiedPrice
+      name: Last Notified
+      type: integer
+    - jsonPath: .status.lastNotifiedAt
+      name: Notified At
+      type: date
+    - jsonPath: .status.conditions[?(@.type=='PriceSynced')].status
+      name: Synced
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RivenPriceWatch is the Schema for the rivenpricewatches API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RivenPriceWatchSpec defines the desired state of RivenPriceWatch.
+            properties:
+              maxPrice:
+                description: MaxPrice is the maximum buyout price in platinum. 0 means
+                  no limit.
+                minimum: 0
+                type: integer
+              maxReRolls:
+                description: MaxReRolls limits results to rivens with at most this
+                  many re-rolls. 0 means no limit.
+                minimum: 0
+                type: integer
+              minRollQuality:
+                description: |-
+                  MinRollQuality is the minimum average roll quality (0–100%) required across
+                  positive stats for a notification to be sent.
+                maximum: 100
+                minimum: 0
+                type: integer
+              negativeStats:
+                description: |-
+                  NegativeStats controls the negative stat filter:
+                  "" = any, "has" = must have one, "none" = no negative, or a specific stat url_name.
+                type: string
+              notificationWindow:
+                description: NotificationWindow restricts notifications to a specific
+                  time range each day.
+                properties:
+                  from:
+                    description: From is the start of the window in "HH:MM" format
+                      (e.g. "10:00").
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                    type: string
+                  to:
+                    description: To is the end of the window in "HH:MM" format (e.g.
+                      "18:00").
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                    type: string
+                required:
+                - from
+                - to
+                type: object
+              positiveStats:
+                description: |-
+                  PositiveStats lists the required positive stat url_names
+                  (e.g. ["critical_chance", "critical_damage"]).
+                items:
+                  type: string
+                type: array
+              threshold:
+                description: Threshold is the platinum price at or below which a notification
+                  is sent.
+                minimum: 1
+                type: integer
+              weaponSlug:
+                description: WeaponSlug is the URL-friendly weapon identifier (e.g.
+                  "falcor", "gram_prime").
+                minLength: 1
+                type: string
+            required:
+            - threshold
+            - weaponSlug
+            type: object
+          status:
+            description: RivenPriceWatchStatus defines the observed state of RivenPriceWatch.
+            properties:
+              bestRollQuality:
+                description: BestRollQuality is the average roll quality of the cheapest
+                  matching auction.
+                type: integer
+              cheapestPrice:
+                description: CheapestPrice is the lowest platinum price found among
+                  matching auctions.
+                type: integer
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the RivenPriceWatch state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastNotifiedAt:
+                description: LastNotifiedAt is the timestamp of the last sent notification.
+                format: date-time
+                type: string
+              lastNotifiedPrice:
+                description: LastNotifiedPrice is the platinum price at which the
+                  last notification was sent.
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

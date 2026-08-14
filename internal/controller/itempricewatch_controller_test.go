@@ -70,7 +70,28 @@ func (s *stubNotificationService) Notify(_ context.Context, title, _ string) err
 	return nil
 }
 
-var _ = Describe("PriceWatch Controller", func() {
+const testNamespace = "default"
+
+// stubExportService is a test double for WarframeExportService.
+type stubExportService struct{}
+
+func (s *stubExportService) GetRecipes(_ context.Context) ([]service.Recipe, error) {
+	return nil, nil
+}
+
+func (s *stubExportService) GetRecipeByResultType(_ context.Context, _ string) (*service.Recipe, error) {
+	return nil, nil
+}
+
+func (s *stubExportService) GetWeaponByGameRef(_ context.Context, _ string) (*service.WeaponInfo, error) {
+	return nil, nil
+}
+
+func (s *stubExportService) GetWeaponByName(_ context.Context, _ string) (*service.WeaponInfo, error) {
+	return nil, nil
+}
+
+var _ = Describe("ItemPriceWatch Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -78,20 +99,20 @@ var _ = Describe("PriceWatch Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default",
+			Namespace: testNamespace,
 		}
-		pricewatch := &warframemarketv1alpha1.PriceWatch{}
+		itemPriceWatch := &warframemarketv1alpha1.ItemPriceWatch{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind PriceWatch")
-			err := k8sClient.Get(ctx, typeNamespacedName, pricewatch)
+			By("creating the custom resource for the Kind ItemPriceWatch")
+			err := k8sClient.Get(ctx, typeNamespacedName, itemPriceWatch)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &warframemarketv1alpha1.PriceWatch{
+				resource := &warframemarketv1alpha1.ItemPriceWatch{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
-					Spec: warframemarketv1alpha1.PriceWatchSpec{
+					Spec: warframemarketv1alpha1.ItemPriceWatchSpec{
 						ItemSlug:  "primed_firestorm",
 						Threshold: 50,
 					},
@@ -101,23 +122,23 @@ var _ = Describe("PriceWatch Controller", func() {
 		})
 
 		AfterEach(func() {
-			resource := &warframemarketv1alpha1.PriceWatch{}
+			resource := &warframemarketv1alpha1.ItemPriceWatch{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance PriceWatch")
+			By("Cleanup the specific resource instance ItemPriceWatch")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 
 		It("should successfully reconcile and update cheapest price", func() {
 			By("Reconciling the created resource")
 			notifSvc := &stubNotificationService{}
-			priceWatchUseCase := usecase.NewPriceWatchUseCase(&stubMarketService{platinum: 42}, notifSvc)
+			itemPriceWatchUseCase := usecase.NewItemPriceWatchUseCase(&stubMarketService{platinum: 42}, notifSvc)
 
-			controllerReconciler := &PriceWatchReconciler{
-				Client:            k8sClient,
-				Scheme:            k8sClient.Scheme(),
-				PriceWatchUseCase: priceWatchUseCase,
+			controllerReconciler := &ItemPriceWatchReconciler{
+				Client:                k8sClient,
+				Scheme:                k8sClient.Scheme(),
+				ItemPriceWatchUseCase: itemPriceWatchUseCase,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -126,7 +147,7 @@ var _ = Describe("PriceWatch Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that the cheapest price was written to status")
-			updated := &warframemarketv1alpha1.PriceWatch{}
+			updated := &warframemarketv1alpha1.ItemPriceWatch{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, updated)).To(Succeed())
 			Expect(updated.Status.CheapestPrice).To(Equal(42))
 

@@ -31,29 +31,29 @@ import (
 	"github.com/benkeil/warframe-market-operator/internal/domain/usecase"
 )
 
-// PriceWatchReconciler reconciles a PriceWatch object
-type PriceWatchReconciler struct {
+// RivenPriceWatchReconciler reconciles a RivenPriceWatch object.
+type RivenPriceWatchReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	PriceWatchUseCase *usecase.PriceWatchUseCase
+	Scheme                 *runtime.Scheme
+	RivenPriceWatchUseCase *usecase.RivenPriceWatchUseCase
 }
 
-// +kubebuilder:rbac:groups=warframe.market,resources=pricewatches,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=warframe.market,resources=pricewatches/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=warframe.market,resources=pricewatches/finalizers,verbs=update
+// +kubebuilder:rbac:groups=warframe.market,resources=rivenpricewatches,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=warframe.market,resources=rivenpricewatches/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=warframe.market,resources=rivenpricewatches/finalizers,verbs=update
 
-func (r *PriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *RivenPriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	priceWatch := &warframemarketv1alpha1.PriceWatch{}
-	if err := r.Get(ctx, req.NamespacedName, priceWatch); err != nil {
+	rivenPriceWatch := &warframemarketv1alpha1.RivenPriceWatch{}
+	if err := r.Get(ctx, req.NamespacedName, rivenPriceWatch); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	useCaseErr := r.PriceWatchUseCase.Execute(ctx, priceWatch)
+	useCaseErr := r.RivenPriceWatchUseCase.Execute(ctx, rivenPriceWatch)
 
-	if err := r.Status().Update(ctx, priceWatch); err != nil {
-		log.Error(err, "failed to update PriceWatch status")
+	if err := r.Status().Update(ctx, rivenPriceWatch); err != nil {
+		log.Error(err, "failed to update RivenPriceWatch status")
 		return ctrl.Result{}, err
 	}
 
@@ -67,9 +67,9 @@ func (r *PriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PriceWatchReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RivenPriceWatchReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&warframemarketv1alpha1.PriceWatch{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Named("pricewatch").
+		For(&warframemarketv1alpha1.RivenPriceWatch{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Named("rivenpricewatch").
 		Complete(r)
 }

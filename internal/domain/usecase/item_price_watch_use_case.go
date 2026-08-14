@@ -28,18 +28,18 @@ const (
 
 const conditionTypePriceSynced = "PriceSynced"
 
-// PriceWatchUseCase fetches the top sell orders for the item configured in the PriceWatch spec,
+// ItemPriceWatchUseCase fetches the top sell orders for the item configured in the ItemPriceWatch spec,
 // writes the cheapest price into its status, and sends a notification when the price reaches
 // or drops below the configured threshold for the first time — or drops below the price
 // at which the last notification was sent.
-type PriceWatchUseCase struct {
+type ItemPriceWatchUseCase struct {
 	marketService       service.WarframeMarketService
 	notificationService service.NotificationService
 }
 
-// NewPriceWatchUseCase creates a new PriceWatchUseCase.
-func NewPriceWatchUseCase(marketService service.WarframeMarketService, notificationService service.NotificationService) *PriceWatchUseCase {
-	return &PriceWatchUseCase{
+// NewItemPriceWatchUseCase creates a new ItemPriceWatchUseCase.
+func NewItemPriceWatchUseCase(marketService service.WarframeMarketService, notificationService service.NotificationService) *ItemPriceWatchUseCase {
+	return &ItemPriceWatchUseCase{
 		marketService:       marketService,
 		notificationService: notificationService,
 	}
@@ -48,7 +48,7 @@ func NewPriceWatchUseCase(marketService service.WarframeMarketService, notificat
 // Execute fetches the top sell orders for the item in priceWatch.Spec and mutates
 // priceWatch.Status with the cheapest price, a PriceSynced condition, and the last
 // notified price when a notification is sent.
-func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframemarketv1alpha1.PriceWatch) error {
+func (uc *ItemPriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframemarketv1alpha1.ItemPriceWatch) error {
 	log := logf.FromContext(ctx).WithValues("item", priceWatch.Spec.ItemSlug, "threshold", priceWatch.Spec.Threshold)
 
 	log.Info("fetching top orders")
@@ -108,7 +108,7 @@ func (uc *PriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframema
 }
 
 // shouldNotify returns whether a notification should be sent and the reason for the decision.
-func (uc *PriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.PriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) (bool, NotifyReason) {
+func (uc *ItemPriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.ItemPriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) (bool, NotifyReason) {
 	if cheapest > threshold {
 		return false, NotifyReasonPriceAboveThreshold
 	}
