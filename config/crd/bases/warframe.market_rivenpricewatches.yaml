@@ -27,9 +27,6 @@ spec:
     - jsonPath: .status.bestRollQuality
       name: Roll Quality
       type: integer
-    - jsonPath: .status.lastNotifiedPrice
-      name: Last Notified
-      type: integer
     - jsonPath: .status.lastNotifiedAt
       name: Notified At
       type: date
@@ -211,10 +208,13 @@ spec:
                 description: LastNotifiedAt is the timestamp of the last sent notification.
                 format: date-time
                 type: string
-              lastNotifiedPrice:
-                description: LastNotifiedPrice is the platinum price at which the
-                  last notification was sent.
-                type: integer
+              notifiedAuctionIds:
+                description: |-
+                  NotifiedAuctionIDs tracks auction IDs for which a notification has already been sent.
+                  This prevents duplicate notifications across reconcile cycles.
+                items:
+                  type: string
+                type: array
             type: object
         type: object
     served: true

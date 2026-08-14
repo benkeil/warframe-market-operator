@@ -36,8 +36,8 @@ func NewRivenPriceWatchUseCase(
 	}
 }
 
-// Execute searches for riven auctions, scores them, and notifies when a qualifying
-// auction is found. It mutates rivenPriceWatch.Status with the results.
+// Execute searches for riven auctions, scores them, and notifies for each new qualifying
+// auction found. It mutates rivenPriceWatch.Status with the results.
 func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemarketv1alpha1.RivenPriceWatch) error {
 	log := logf.FromContext(ctx).WithValues("weapon", rpw.Spec.WeaponSlug, "threshold", rpw.Spec.Threshold)
 
@@ -89,22 +89,66 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 		// Not fatal — we continue without scoring
 	}
 
-	// Find cheapest auction that meets MinRollQuality.
-	var best *service.Auction
-	var bestQuality int
-	for i := range auctions {
-		a := &auctions[i]
-		avgQuality := avgRollQuality(uc.calculator.ScoreAuction(*a, weapon))
-		if avgQuality < rpw.Spec.MinRollQuality {
-			continue
-		}
-		if best == nil || a.BuyoutPrice < best.BuyoutPrice {
-			best = a
-			bestQuality = avgQuality
+	notifiedSet := make(map[string]bool, len(rpw.Status.NotifiedAuctionIDs))
+	// Reset notified IDs at the start of a new day so auctions are re-notified daily.
+	if rpw.Status.LastNotifiedAt != nil {
+		ly, lm, ld := rpw.Status.LastNotifiedAt.Date()
+		ty, tm, td := time.Now().Date()
+		if ly != ty || lm != tm || ld != td {
+			log.Info("new day — resetting notified auction IDs")
+			rpw.Status.NotifiedAuctionIDs = nil
 		}
 	}
+	for _, id := range rpw.Status.NotifiedAuctionIDs {
+		notifiedSet[id] = true
+	}
 
-	if best == nil {
+	// Collect qualifying auctions and track cheapest.
+	var cheapest int
+	var bestQuality int
+	var notifyCount int
+
+	for i := range auctions {
+		a := &auctions[i]
+		scores := uc.calculator.ScoreAuction(*a, weapon)
+		quality := avgRollQuality(scores)
+
+		if quality < rpw.Spec.MinRollQuality {
+			continue
+		}
+
+		// Track cheapest across all qualifying auctions.
+		if cheapest == 0 || a.BuyoutPrice < cheapest {
+			cheapest = a.BuyoutPrice
+			bestQuality = quality
+		}
+
+		if notifiedSet[a.ID] {
+			continue
+		}
+
+		// New qualifying auction — notify.
+		window := rpw.Spec.NotificationWindow
+		if window != nil && !isWithinWindow(time.Now(), window.From, window.To) {
+			log.Info("notification skipped (outside window)", "auctionID", a.ID)
+			continue
+		}
+
+		log.Info("sending notification", "auctionID", a.ID, "price", a.BuyoutPrice, "rollQuality", quality)
+		title := fmt.Sprintf("Riven alert: %s", rpw.Spec.WeaponSlug)
+		message := fmt.Sprintf("%s — %dp | roll quality: %d%% | seller: %s (%s)",
+			a.Item.Name, a.BuyoutPrice, quality, a.Owner.IngameName, a.Owner.Status)
+		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
+			log.Error(err, "failed to send notification", "auctionID", a.ID)
+			return fmt.Errorf("sending notification: %w", err)
+		}
+
+		rpw.Status.NotifiedAuctionIDs = append(rpw.Status.NotifiedAuctionIDs, a.ID)
+		notifiedSet[a.ID] = true
+		notifyCount++
+	}
+
+	if cheapest == 0 {
 		log.Info("no auction meets minimum roll quality", "minRollQuality", rpw.Spec.MinRollQuality)
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "QualityThresholdNotMet"
@@ -113,61 +157,21 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 		return nil
 	}
 
-	cheapest := best.BuyoutPrice
 	rpw.Status.CheapestPrice = cheapest
 	rpw.Status.BestRollQuality = bestQuality
-	log.Info("best auction", "price", cheapest, "rollQuality", bestQuality)
+
+	if notifyCount > 0 {
+		now := metav1.Now()
+		rpw.Status.LastNotifiedAt = &now
+		log.Info("notifications sent", "count", notifyCount)
+	}
 
 	condition.Status = metav1.ConditionTrue
 	condition.Reason = "AuctionFound"
 	condition.Message = fmt.Sprintf("Cheapest qualifying auction: %d platinum (roll quality: %d%%)", cheapest, bestQuality)
 	setCondition(&rpw.Status.Conditions, condition)
 
-	notify, reason := uc.shouldNotifyRiven(cheapest, rpw.Spec.Threshold, &rpw.Status, rpw.Spec.NotificationWindow)
-	if notify {
-		log.Info("sending notification", "price", cheapest)
-		title := fmt.Sprintf("Riven alert: %s", rpw.Spec.WeaponSlug)
-		message := fmt.Sprintf("%d platinum | roll quality: %d%% | threshold: %d", cheapest, bestQuality, rpw.Spec.Threshold)
-		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
-			log.Error(err, "failed to send notification")
-			return fmt.Errorf("sending notification: %w", err)
-		}
-		now := metav1.Now()
-		rpw.Status.LastNotifiedPrice = &cheapest
-		rpw.Status.LastNotifiedAt = &now
-		log.Info("notification sent", "price", cheapest)
-	} else {
-		log.Info("notification skipped", "price", cheapest, "reason", reason)
-	}
-
 	return nil
-}
-
-func (uc *RivenPriceWatchUseCase) shouldNotifyRiven(cheapest, threshold int, status *warframemarketv1alpha1.RivenPriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) (bool, NotifyReason) {
-	if cheapest > threshold {
-		return false, NotifyReasonPriceAboveThreshold
-	}
-
-	now := time.Now()
-	if window != nil && !isWithinWindow(now, window.From, window.To) {
-		return false, NotifyReasonOutsideWindow
-	}
-
-	if status.LastNotifiedAt != nil {
-		ly, lm, ld := status.LastNotifiedAt.Date()
-		ty, tm, td := now.Date()
-		if ly != ty || lm != tm || ld != td {
-			return true, NotifyReasonNewDay
-		}
-	}
-
-	if status.LastNotifiedPrice == nil {
-		return true, NotifyReasonFirstNotificationToday
-	}
-	if cheapest < *status.LastNotifiedPrice {
-		return true, NotifyReasonNewLow
-	}
-	return false, NotifyReasonNoNewLow
 }
 
 // avgRollQuality returns the average roll quality (0–100) across positive stats.

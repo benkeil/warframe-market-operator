@@ -77,9 +77,10 @@ type RivenPriceWatchStatus struct {
 	// +optional
 	BestRollQuality int `json:"bestRollQuality,omitempty"`
 
-	// LastNotifiedPrice is the platinum price at which the last notification was sent.
+	// NotifiedAuctionIDs tracks auction IDs for which a notification has already been sent.
+	// This prevents duplicate notifications across reconcile cycles.
 	// +optional
-	LastNotifiedPrice *int `json:"lastNotifiedPrice,omitempty"`
+	NotifiedAuctionIDs []string `json:"notifiedAuctionIds,omitempty"`
 
 	// LastNotifiedAt is the timestamp of the last sent notification.
 	// +optional
@@ -98,7 +99,6 @@ type RivenPriceWatchStatus struct {
 // +kubebuilder:printcolumn:name="Threshold",type="integer",JSONPath=".spec.threshold"
 // +kubebuilder:printcolumn:name="Cheapest",type="integer",JSONPath=".status.cheapestPrice"
 // +kubebuilder:printcolumn:name="Roll Quality",type="integer",JSONPath=".status.bestRollQuality"
-// +kubebuilder:printcolumn:name="Last Notified",type="integer",JSONPath=".status.lastNotifiedPrice"
 // +kubebuilder:printcolumn:name="Notified At",type="date",JSONPath=".status.lastNotifiedAt"
 // +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='PriceSynced')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
