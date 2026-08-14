@@ -97,7 +97,7 @@ var _ = Describe("Manager", Ordered, func() {
 			}).Should(Succeed())
 
 			metricsOutput := getMetricsOutput()
-			Expect(metricsOutput).To(ContainSubstring("controller_runtime_reconcile_total"))
+			Expect(metricsOutput).To(ContainSubstring("go_goroutines"))
 		})
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks

@@ -119,12 +119,13 @@ var _ = BeforeSuite(func() {
 		controllerPodName = podNames[0]
 
 		cmd = exec.Command("kubectl", "get",
-			"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
+			"pods", controllerPodName,
+			"-o", "jsonpath={.status.containerStatuses[0].ready}",
 			"-n", namespace,
 		)
 		output, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(output).To(Equal("Running"))
+		g.Expect(output).To(Equal("true"), "controller container not yet ready")
 	}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 	By("creating metrics ClusterRoleBinding")
