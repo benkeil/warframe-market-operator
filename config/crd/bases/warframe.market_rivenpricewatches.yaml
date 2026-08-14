@@ -64,11 +64,6 @@ spec:
           spec:
             description: RivenPriceWatchSpec defines the desired state of RivenPriceWatch.
             properties:
-              maxPrice:
-                description: MaxPrice is the maximum buyout price in platinum. 0 means
-                  no limit.
-                minimum: 0
-                type: integer
               maxReRolls:
                 description: MaxReRolls limits results to rivens with at most this
                   many re-rolls. 0 means no limit.
@@ -104,6 +99,17 @@ spec:
                 - from
                 - to
                 type: object
+              playerStatus:
+                description: |-
+                  PlayerStatus filters auctions by seller online status.
+                  Valid values: ingame, online, offline. Defaults to [ingame, online] if not set.
+                items:
+                  enum:
+                  - ingame
+                  - online
+                  - offline
+                  type: string
+                type: array
               positiveStats:
                 description: |-
                   PositiveStats lists the required positive stat url_names

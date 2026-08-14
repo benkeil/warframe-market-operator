@@ -1,9 +1,14 @@
 apiVersion: warframe.market/v1alpha1
-kind: ItemPriceWatch
+kind: RivenPriceWatch
 metadata:
   labels:
     app.kubernetes.io/name: warframe-market-operator
     app.kubernetes.io/managed-by: kustomize
-  name: itempricewatch-sample
+  name: falcor-riven
 spec:
-  # TODO(user): Add fields here
+  weaponSlug: falcor
+  maxReRolls: 1
+  threshold: 20
+  notificationWindow:
+    from: "08:00"
+    to: "22:00"

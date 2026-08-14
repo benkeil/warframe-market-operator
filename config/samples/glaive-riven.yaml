@@ -4,6 +4,11 @@ metadata:
   labels:
     app.kubernetes.io/name: warframe-market-operator
     app.kubernetes.io/managed-by: kustomize
-  name: rivenpricewatch-sample
+  name: glaive-riven
 spec:
-  # TODO(user): Add fields here
+  weaponSlug: glaive
+  maxReRolls: 1
+  threshold: 20
+  notificationWindow:
+    from: "08:00"
+    to: "22:00"

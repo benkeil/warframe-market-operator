@@ -22,13 +22,4 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the warframe-market-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- rivenpricewatch_admin_role.yaml
-- rivenpricewatch_editor_role.yaml
-- rivenpricewatch_viewer_role.yaml
-- itempricewatch_admin_role.yaml
-- itempricewatch_editor_role.yaml
-- itempricewatch_viewer_role.yaml
-- pricewatch_admin_role.yaml
-- pricewatch_editor_role.yaml
-- pricewatch_viewer_role.yaml
 

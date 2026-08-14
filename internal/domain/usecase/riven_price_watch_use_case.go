@@ -41,11 +41,12 @@ func NewRivenPriceWatchUseCase(
 func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemarketv1alpha1.RivenPriceWatch) error {
 	log := logf.FromContext(ctx).WithValues("weapon", rpw.Spec.WeaponSlug, "threshold", rpw.Spec.Threshold)
 
+	statusFilter := toUserStatuses(rpw.Spec.PlayerStatus)
 	filter := service.AuctionFilter{
 		WeaponURLName: rpw.Spec.WeaponSlug,
 		PositiveStats: rpw.Spec.PositiveStats,
 		SortBy:        "price_asc",
-		Status:        []service.UserStatus{service.UserStatusIngame, service.UserStatusOnline},
+		Status:        statusFilter,
 	}
 	if rpw.Spec.NegativeStats != "" {
 		filter.NegativeStats = rpw.Spec.NegativeStats
@@ -53,9 +54,7 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 	if rpw.Spec.MaxReRolls > 0 {
 		filter.ReRollsMax = rpw.Spec.MaxReRolls
 	}
-	if rpw.Spec.MaxPrice > 0 {
-		filter.BuyoutPriceMax = rpw.Spec.MaxPrice
-	}
+	filter.BuyoutPriceMax = rpw.Spec.Threshold
 
 	condition := metav1.Condition{
 		Type:               conditionTypePriceSynced,
@@ -188,4 +187,17 @@ func avgRollQuality(scores []RivenStatScore) int {
 		return 0
 	}
 	return int(sum / float64(count))
+}
+
+// toUserStatuses converts a slice of status strings from the spec to domain types.
+// Defaults to [ingame, online] when empty.
+func toUserStatuses(statuses []string) []service.UserStatus {
+	if len(statuses) == 0 {
+		return []service.UserStatus{service.UserStatusIngame, service.UserStatusOnline}
+	}
+	result := make([]service.UserStatus, 0, len(statuses))
+	for _, s := range statuses {
+		result = append(result, service.UserStatus(s))
+	}
+	return result
 }

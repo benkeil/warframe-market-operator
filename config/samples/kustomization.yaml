@@ -1,8 +1,6 @@
 ## Append samples of your project ##
 resources:
-- v1alpha1_pricewatch.yaml
-- v1alpha1_itempricewatch.yaml
-- _v1alpha1_itempricewatch.yaml
-- v1alpha1_rivenpricewatch.yaml
-- _v1alpha1_rivenpricewatch.yaml
+- primed-firestorm-item.yaml
+- falcor-riven.yaml
+- glaive-riven.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

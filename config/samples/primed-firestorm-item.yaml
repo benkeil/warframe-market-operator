@@ -1,5 +1,5 @@
 apiVersion: warframe.market/v1alpha1
-kind: PriceWatch
+kind: ItemPriceWatch
 metadata:
   labels:
     app.kubernetes.io/name: warframe-market-operator

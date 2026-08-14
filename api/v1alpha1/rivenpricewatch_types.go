@@ -41,10 +41,11 @@ type RivenPriceWatchSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	MaxReRolls int `json:"maxReRolls,omitempty"`
 
-	// MaxPrice is the maximum buyout price in platinum. 0 means no limit.
+	// PlayerStatus filters auctions by seller online status.
+	// Valid values: ingame, online, offline. Defaults to [ingame, online] if not set.
 	// +optional
-	// +kubebuilder:validation:Minimum=0
-	MaxPrice int `json:"maxPrice,omitempty"`
+	// +kubebuilder:validation:items:Enum=ingame;online;offline
+	PlayerStatus []string `json:"playerStatus,omitempty"`
 
 	// MinRollQuality is the minimum average roll quality (0–100%) required across
 	// positive stats for a notification to be sent.
