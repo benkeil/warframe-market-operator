@@ -42,9 +42,11 @@ type ItemPriceWatchStatus struct {
 	// +optional
 	CheapestPrice int `json:"cheapestPrice,omitempty"`
 
-	// LastNotifiedPrice is the platinum price at which the last notification was sent.
+	// NotifiedOrderID is the order ID of the cheapest seller for which a notification
+	// was last sent. It is cleared when that seller goes offline, so that a re-notification
+	// is triggered when they come back online.
 	// +optional
-	LastNotifiedPrice *int `json:"lastNotifiedPrice,omitempty"`
+	NotifiedOrderID string `json:"notifiedOrderId,omitempty"`
 
 	// LastNotifiedAt is the timestamp of the last sent notification.
 	// +optional
@@ -62,7 +64,6 @@ type ItemPriceWatchStatus struct {
 // +kubebuilder:printcolumn:name="Item",type="string",JSONPath=".spec.itemSlug"
 // +kubebuilder:printcolumn:name="Threshold",type="integer",JSONPath=".spec.threshold"
 // +kubebuilder:printcolumn:name="Cheapest",type="integer",JSONPath=".status.cheapestPrice"
-// +kubebuilder:printcolumn:name="Last Notified",type="integer",JSONPath=".status.lastNotifiedPrice"
 // +kubebuilder:printcolumn:name="Notified At",type="date",JSONPath=".status.lastNotifiedAt"
 // +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='PriceSynced')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

@@ -14,18 +14,6 @@ import (
 	"github.com/benkeil/warframe-market-operator/internal/domain/service"
 )
 
-// NotifyReason describes why a notification was or was not sent.
-type NotifyReason string
-
-const (
-	NotifyReasonPriceAboveThreshold    NotifyReason = "price above threshold"
-	NotifyReasonOutsideWindow          NotifyReason = "outside notification window"
-	NotifyReasonNewDay                 NotifyReason = "new day reset"
-	NotifyReasonFirstNotificationToday NotifyReason = "first notification today"
-	NotifyReasonNewLow                 NotifyReason = "new low today"
-	NotifyReasonNoNewLow               NotifyReason = "no new low today"
-)
-
 const conditionTypePriceSynced = "PriceSynced"
 
 // ItemPriceWatchUseCase fetches the top sell orders for the item configured in the ItemPriceWatch spec,
@@ -46,8 +34,9 @@ func NewItemPriceWatchUseCase(marketService service.WarframeMarketService, notif
 }
 
 // Execute fetches the top sell orders for the item in priceWatch.Spec and mutates
-// priceWatch.Status with the cheapest price, a PriceSynced condition, and the last
-// notified price when a notification is sent.
+// priceWatch.Status with the cheapest price and a PriceSynced condition.
+// A notification is sent when the cheapest seller changes (new seller or previously
+// offline seller returning online), provided price is at or below the threshold.
 func (uc *ItemPriceWatchUseCase) Execute(ctx context.Context, priceWatch *warframemarketv1alpha1.ItemPriceWatch) error {
 	log := logf.FromContext(ctx).WithValues("item", priceWatch.Spec.ItemSlug, "threshold", priceWatch.Spec.Threshold)
 
@@ -71,69 +60,71 @@ func (uc *ItemPriceWatchUseCase) Execute(ctx context.Context, priceWatch *warfra
 
 	if len(topOrders.Sell) == 0 {
 		log.Info("no sell orders found")
+		priceWatch.Status.NotifiedOrderID = ""
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoSellOrders"
 		condition.Message = fmt.Sprintf("No sell orders found for item %q", priceWatch.Spec.ItemSlug)
 		setCondition(&priceWatch.Status.Conditions, condition)
-		return fmt.Errorf("no sell orders found for item %q", priceWatch.Spec.ItemSlug)
+		return nil
 	}
 
-	cheapest := cheapestPlatinum(topOrders.Sell)
-	priceWatch.Status.CheapestPrice = cheapest
-	log.Info("price check", "cheapest", cheapest)
+	cheapestOrder := minOrder(topOrders.Sell)
+	priceWatch.Status.CheapestPrice = cheapestOrder.Platinum
+	log.Info("price check", "cheapest", cheapestOrder.Platinum)
 
 	condition.Status = metav1.ConditionTrue
 	condition.Reason = "PriceFetched"
-	condition.Message = fmt.Sprintf("Cheapest sell price is %d platinum", cheapest)
+	condition.Message = fmt.Sprintf("Cheapest sell price is %d platinum", cheapestOrder.Platinum)
 	setCondition(&priceWatch.Status.Conditions, condition)
 
-	notify, reason := uc.shouldNotify(cheapest, priceWatch.Spec.Threshold, &priceWatch.Status, priceWatch.Spec.NotificationWindow)
-	if notify {
-		log.Info("sending notification", "cheapest", cheapest)
-		title := fmt.Sprintf("Price alert: %s", priceWatch.Spec.ItemSlug)
-		message := fmt.Sprintf("%d platinum (threshold: %d)", cheapest, priceWatch.Spec.Threshold)
-		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
-			log.Error(err, "failed to send notification")
-			return fmt.Errorf("sending notification: %w", err)
-		}
-		now := metav1.Now()
-		priceWatch.Status.LastNotifiedPrice = &cheapest
-		priceWatch.Status.LastNotifiedAt = &now
-		log.Info("notification sent", "cheapest", cheapest)
-	} else {
-		log.Info("notification skipped", "cheapest", cheapest, "reason", reason)
+	// If price is above threshold, reset so we re-notify when it drops again.
+	if cheapestOrder.Platinum > priceWatch.Spec.Threshold {
+		priceWatch.Status.NotifiedOrderID = ""
+		log.Info("notification skipped", "reason", "price above threshold")
+		return nil
 	}
+
+	// Check whether the previously notified order is still visible (seller still online).
+	// If not, the seller went offline — clear the ID so we re-notify when they return.
+	if priceWatch.Status.NotifiedOrderID != "" {
+		stillVisible := false
+		for _, o := range topOrders.Sell {
+			if o.ID == priceWatch.Status.NotifiedOrderID {
+				stillVisible = true
+				break
+			}
+		}
+		if !stillVisible {
+			log.Info("previously notified seller is offline, resetting")
+			priceWatch.Status.NotifiedOrderID = ""
+		}
+	}
+
+	// Already notified for this exact order (seller still online and cheapest).
+	if priceWatch.Status.NotifiedOrderID == cheapestOrder.ID {
+		log.Info("notification skipped", "reason", "no new low")
+		return nil
+	}
+
+	if priceWatch.Spec.NotificationWindow != nil && !isWithinWindow(time.Now(), priceWatch.Spec.NotificationWindow.From, priceWatch.Spec.NotificationWindow.To) {
+		log.Info("notification skipped", "reason", "outside notification window")
+		return nil
+	}
+
+	log.Info("sending notification", "cheapest", cheapestOrder.Platinum, "seller", cheapestOrder.User.IngameName)
+	title := fmt.Sprintf("Price alert: %s", priceWatch.Spec.ItemSlug)
+	message := fmt.Sprintf("%d platinum | seller: %s (%s) | threshold: %d",
+		cheapestOrder.Platinum, cheapestOrder.User.IngameName, cheapestOrder.User.Status, priceWatch.Spec.Threshold)
+	if err := uc.notificationService.Notify(ctx, title, message); err != nil {
+		log.Error(err, "failed to send notification")
+		return fmt.Errorf("sending notification: %w", err)
+	}
+	now := metav1.Now()
+	priceWatch.Status.NotifiedOrderID = cheapestOrder.ID
+	priceWatch.Status.LastNotifiedAt = &now
+	log.Info("notification sent", "cheapest", cheapestOrder.Platinum)
 
 	return nil
-}
-
-// shouldNotify returns whether a notification should be sent and the reason for the decision.
-func (uc *ItemPriceWatchUseCase) shouldNotify(cheapest, threshold int, status *warframemarketv1alpha1.ItemPriceWatchStatus, window *warframemarketv1alpha1.NotificationWindow) (bool, NotifyReason) {
-	if cheapest > threshold {
-		return false, NotifyReasonPriceAboveThreshold
-	}
-
-	now := time.Now()
-
-	if window != nil && !isWithinWindow(now, window.From, window.To) {
-		return false, NotifyReasonOutsideWindow
-	}
-
-	if status.LastNotifiedAt != nil {
-		ly, lm, ld := status.LastNotifiedAt.Date()
-		ty, tm, td := now.Date()
-		if ly != ty || lm != tm || ld != td {
-			return true, NotifyReasonNewDay
-		}
-	}
-
-	if status.LastNotifiedPrice == nil {
-		return true, NotifyReasonFirstNotificationToday
-	}
-	if cheapest < *status.LastNotifiedPrice {
-		return true, NotifyReasonNewLow
-	}
-	return false, NotifyReasonNoNewLow
 }
 
 // isWithinWindow reports whether t falls within the [from, to] time-of-day range.
@@ -151,10 +142,10 @@ func isWithinWindow(t time.Time, from, to string) bool {
 	return cur >= fh*60+fm && cur <= th*60+tm
 }
 
-func cheapestPlatinum(orders []service.Order) int {
+func minOrder(orders []service.Order) service.Order {
 	return slices.MinFunc(orders, func(a, b service.Order) int {
 		return cmp.Compare(a.Platinum, b.Platinum)
-	}).Platinum
+	})
 }
 
 // setCondition upserts a condition into the slice (matched by Type).

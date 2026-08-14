@@ -24,9 +24,6 @@ spec:
     - jsonPath: .status.cheapestPrice
       name: Cheapest
       type: integer
-    - jsonPath: .status.lastNotifiedPrice
-      name: Last Notified
-      type: integer
     - jsonPath: .status.lastNotifiedAt
       name: Notified At
       type: date
@@ -166,10 +163,12 @@ spec:
                 description: LastNotifiedAt is the timestamp of the last sent notification.
                 format: date-time
                 type: string
-              lastNotifiedPrice:
-                description: LastNotifiedPrice is the platinum price at which the
-                  last notification was sent.
-                type: integer
+              notifiedOrderId:
+                description: |-
+                  NotifiedOrderID is the order ID of the cheapest seller for which a notification
+                  was last sent. It is cleared when that seller goes offline, so that a re-notification
+                  is triggered when they come back online.
+                type: string
             type: object
         type: object
     served: true
