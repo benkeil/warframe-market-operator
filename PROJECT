@@ -35,4 +35,12 @@ resources:
   kind: RivenPriceWatch
   path: github.com/benkeil/warframe-market-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: warframe.market
+  kind: HelloWorld
+  path: github.com/benkeil/warframe-market-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

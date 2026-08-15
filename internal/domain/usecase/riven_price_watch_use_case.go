@@ -6,11 +6,19 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgov1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	warframemarketv1alpha1 "github.com/benkeil/warframe-market-operator/api/v1alpha1"
+	v1alpha1ac "github.com/benkeil/warframe-market-operator/internal/applyconfiguration/api/v1alpha1"
 	"github.com/benkeil/warframe-market-operator/internal/domain/service"
 )
+
+// RivenPriceWatchResult is the output of RivenPriceWatchUseCase.Execute.
+// The use case does not mutate the input.
+type RivenPriceWatchResult struct {
+	Status *v1alpha1ac.RivenPriceWatchStatusApplyConfiguration
+}
 
 // RivenPriceWatchUseCase searches riven auctions for the weapon configured in the
 // RivenPriceWatch spec, computes roll quality, and sends a notification when a
@@ -37,9 +45,15 @@ func NewRivenPriceWatchUseCase(
 }
 
 // Execute searches for riven auctions, scores them, and notifies for each new qualifying
-// auction found. It mutates rivenPriceWatch.Status with the results.
-func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemarketv1alpha1.RivenPriceWatch) error {
+// auction found. It returns the desired status to apply and does not mutate rpw.
+func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemarketv1alpha1.RivenPriceWatch) (*RivenPriceWatchResult, error) {
 	log := logf.FromContext(ctx).WithValues("weapon", rpw.Spec.WeaponSlug, "threshold", rpw.Spec.Threshold)
+
+	status := v1alpha1ac.RivenPriceWatchStatus()
+	condition := clientgov1.Condition().
+		WithType(conditionTypePriceSynced).
+		WithObservedGeneration(rpw.Generation).
+		WithLastTransitionTime(metav1.Now())
 
 	statusFilter := toUserStatuses(rpw.Spec.PlayerStatus)
 	filter := service.AuctionFilter{
@@ -57,56 +71,51 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 	}
 	filter.BuyoutPriceMax = rpw.Spec.Threshold
 
-	condition := metav1.Condition{
-		Type:               conditionTypePriceSynced,
-		ObservedGeneration: rpw.Generation,
-		LastTransitionTime: metav1.Now(),
-	}
-
 	log.Info("searching riven auctions")
 	auctions, err := uc.marketService.SearchAuctions(ctx, filter)
 	if err != nil {
 		log.Error(err, "failed to search auctions")
-		condition.Status = metav1.ConditionFalse
-		condition.Reason = "FetchFailed"
-		condition.Message = fmt.Sprintf("Failed to search auctions: %v", err)
-		setCondition(&rpw.Status.Conditions, condition)
-		return err
+		status.WithConditions(condition.
+			WithStatus(metav1.ConditionFalse).
+			WithReason("FetchFailed").
+			WithMessage(fmt.Sprintf("Failed to search auctions: %v", err)))
+		return &RivenPriceWatchResult{Status: status}, err
 	}
 
 	if len(auctions) == 0 {
 		log.Info("no auctions found")
-		condition.Status = metav1.ConditionTrue
-		condition.Reason = "NoAuctions"
-		condition.Message = fmt.Sprintf("No auctions found for weapon %q", rpw.Spec.WeaponSlug)
-		setCondition(&rpw.Status.Conditions, condition)
-		return nil
+		status.WithConditions(condition.
+			WithStatus(metav1.ConditionTrue).
+			WithReason("NoAuctions").
+			WithMessage(fmt.Sprintf("No auctions found for weapon %q", rpw.Spec.WeaponSlug)))
+		return &RivenPriceWatchResult{Status: status}, nil
 	}
 
 	weapon, err := uc.exportService.GetWeaponByName(ctx, rpw.Spec.WeaponSlug)
 	if err != nil {
 		log.Error(err, "failed to get weapon info for scoring")
-		// Not fatal — we continue without scoring
+		// Not fatal — continue without scoring
 	}
 
-	notifiedSet := make(map[string]bool, len(rpw.Status.NotifiedAuctionIDs))
 	// Reset notified IDs at the start of a new day so auctions are re-notified daily.
+	notifiedIDs := rpw.Status.NotifiedAuctionIDs
 	if rpw.Status.LastNotifiedAt != nil {
 		ly, lm, ld := rpw.Status.LastNotifiedAt.Date()
 		ty, tm, td := time.Now().Date()
 		if ly != ty || lm != tm || ld != td {
 			log.Info("new day — resetting notified auction IDs")
-			rpw.Status.NotifiedAuctionIDs = nil
+			notifiedIDs = nil
 		}
 	}
-	for _, id := range rpw.Status.NotifiedAuctionIDs {
+	notifiedSet := make(map[string]bool, len(notifiedIDs))
+	for _, id := range notifiedIDs {
 		notifiedSet[id] = true
 	}
 
-	// Collect qualifying auctions and track cheapest.
 	var cheapest int
 	var bestQuality int
 	var notifyCount int
+	newNotifiedIDs := append([]string(nil), notifiedIDs...)
 
 	for i := range auctions {
 		a := &auctions[i]
@@ -117,7 +126,6 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 			continue
 		}
 
-		// Track cheapest across all qualifying auctions.
 		if cheapest == 0 || a.BuyoutPrice < cheapest {
 			cheapest = a.BuyoutPrice
 			bestQuality = quality
@@ -127,7 +135,6 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 			continue
 		}
 
-		// New qualifying auction — notify.
 		window := rpw.Spec.NotificationWindow
 		if window != nil && !isWithinWindow(time.Now(), window.From, window.To) {
 			log.Info("notification skipped (outside window)", "auctionID", a.ID)
@@ -140,42 +147,42 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 			a.Item.Name, a.BuyoutPrice, quality, a.Owner.IngameName, a.Owner.Status)
 		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
 			log.Error(err, "failed to send notification", "auctionID", a.ID)
-			return fmt.Errorf("sending notification: %w", err)
+			status.WithNotifiedAuctionIDs(newNotifiedIDs...).WithConditions(condition.
+				WithStatus(metav1.ConditionTrue).
+				WithReason("AuctionFound").
+				WithMessage(fmt.Sprintf("Cheapest qualifying auction: %d platinum (roll quality: %d%%)", cheapest, bestQuality)))
+			return &RivenPriceWatchResult{Status: status}, fmt.Errorf("sending notification: %w", err)
 		}
 
-		rpw.Status.NotifiedAuctionIDs = append(rpw.Status.NotifiedAuctionIDs, a.ID)
+		newNotifiedIDs = append(newNotifiedIDs, a.ID)
 		notifiedSet[a.ID] = true
 		notifyCount++
 	}
 
 	if cheapest == 0 {
 		log.Info("no auction meets minimum roll quality", "minRollQuality", rpw.Spec.MinRollQuality)
-		condition.Status = metav1.ConditionTrue
-		condition.Reason = "QualityThresholdNotMet"
-		condition.Message = fmt.Sprintf("No auction meets minimum roll quality of %d%%", rpw.Spec.MinRollQuality)
-		setCondition(&rpw.Status.Conditions, condition)
-		return nil
+		status.WithConditions(condition.
+			WithStatus(metav1.ConditionTrue).
+			WithReason("QualityThresholdNotMet").
+			WithMessage(fmt.Sprintf("No auction meets minimum roll quality of %d%%", rpw.Spec.MinRollQuality)))
+		return &RivenPriceWatchResult{Status: status}, nil
 	}
 
-	rpw.Status.CheapestPrice = cheapest
-	rpw.Status.BestRollQuality = bestQuality
-
+	status.WithCheapestPrice(cheapest).WithBestRollQuality(bestQuality).WithNotifiedAuctionIDs(newNotifiedIDs...)
 	if notifyCount > 0 {
 		now := metav1.Now()
-		rpw.Status.LastNotifiedAt = &now
+		status.WithLastNotifiedAt(now)
 		log.Info("notifications sent", "count", notifyCount)
 	}
+	status.WithConditions(condition.
+		WithStatus(metav1.ConditionTrue).
+		WithReason("AuctionFound").
+		WithMessage(fmt.Sprintf("Cheapest qualifying auction: %d platinum (roll quality: %d%%)", cheapest, bestQuality)))
 
-	condition.Status = metav1.ConditionTrue
-	condition.Reason = "AuctionFound"
-	condition.Message = fmt.Sprintf("Cheapest qualifying auction: %d platinum (roll quality: %d%%)", cheapest, bestQuality)
-	setCondition(&rpw.Status.Conditions, condition)
-
-	return nil
+	return &RivenPriceWatchResult{Status: status}, nil
 }
 
 // avgRollQuality returns the average roll quality (0–100) across positive stats.
-// Negative stats are excluded (they are already scored inverted in the CLI display).
 func avgRollQuality(scores []RivenStatScore) int {
 	if len(scores) == 0 {
 		return 0

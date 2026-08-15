@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	warframemarketv1alpha1 "github.com/benkeil/warframe-market-operator/api/v1alpha1"
+	v1alpha1ac "github.com/benkeil/warframe-market-operator/internal/applyconfiguration/api/v1alpha1"
 	"github.com/benkeil/warframe-market-operator/internal/domain/usecase"
 )
 
@@ -45,16 +46,20 @@ type ItemPriceWatchReconciler struct {
 func (r *ItemPriceWatchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	itemPriceWatch := &warframemarketv1alpha1.ItemPriceWatch{}
-	if err := r.Get(ctx, req.NamespacedName, itemPriceWatch); err != nil {
+	original := &warframemarketv1alpha1.ItemPriceWatch{}
+	if err := r.Get(ctx, req.NamespacedName, original); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	useCaseErr := r.ItemPriceWatchUseCase.Execute(ctx, itemPriceWatch)
+	result, useCaseErr := r.ItemPriceWatchUseCase.Execute(ctx, original)
 
-	if err := r.Status().Update(ctx, itemPriceWatch); err != nil {
-		log.Error(err, "failed to update ItemPriceWatch status")
-		return ctrl.Result{}, err
+	if result != nil {
+		statusPatch := v1alpha1ac.ItemPriceWatch(original.Name, original.Namespace).
+			WithStatus(result.Status)
+		if err := r.SubResource("status").Apply(ctx, statusPatch, client.FieldOwner("itempricewatch-controller"), client.ForceOwnership); err != nil {
+			log.Error(err, "failed to apply ItemPriceWatch status")
+			return ctrl.Result{}, err
+		}
 	}
 
 	if useCaseErr != nil {

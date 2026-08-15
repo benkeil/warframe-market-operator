@@ -23,6 +23,7 @@ golangci_lint  := justfile_directory() + "/bin/golangci-lint"
 controller_gen_version := "v0.18.0"
 kustomize_version      := "v5.6.0"
 golangci_lint_version  := "v2.1.0"
+applyconfiguration_gen_version := "v0.36.0"
 
 # Default recipe
 default: build
@@ -34,6 +35,7 @@ tools:
     GOBIN=$(pwd)/bin go install sigs.k8s.io/kustomize/kustomize/v5@{{kustomize_version}}
     GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
     GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{golangci_lint_version}}
+    GOBIN=$(pwd)/bin go install k8s.io/code-generator/cmd/applyconfiguration-gen@{{applyconfiguration_gen_version}}
 
 # --- Development ---
 
@@ -41,9 +43,14 @@ tools:
 manifests:
     {{controller_gen}} rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-# Generate DeepCopy method implementations
+# Generate DeepCopy method implementations and SSA apply configurations
 generate:
     {{controller_gen}} object:headerFile="hack/boilerplate.go.txt" paths="./..."
+    bin/applyconfiguration-gen \
+        --output-dir internal/applyconfiguration \
+        --output-pkg github.com/benkeil/warframe-market-operator/internal/applyconfiguration \
+        --go-header-file hack/boilerplate.go.txt \
+        github.com/benkeil/warframe-market-operator/api/v1alpha1
 
 # Run go fmt
 fmt:

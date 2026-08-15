@@ -52,7 +52,7 @@ func (s *stubMarketService) GetOrdersByItem(_ context.Context, _ string, _ servi
 
 func (s *stubMarketService) GetTopOrdersByItem(_ context.Context, _ string, _ service.OrdersFilter) (*service.TopOrders, error) {
 	return &service.TopOrders{
-		Sell: []service.Order{{Platinum: s.platinum}},
+		Sell: []service.Order{{ID: "order-1", Platinum: s.platinum}},
 	}, nil
 }
 

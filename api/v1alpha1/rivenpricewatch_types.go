@@ -93,6 +93,7 @@ type RivenPriceWatchStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Weapon",type="string",JSONPath=".spec.weaponSlug"
