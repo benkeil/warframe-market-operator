@@ -66,7 +66,7 @@ func (uc *GetSetInfoUseCase) Execute(ctx context.Context, slug string) (*SetInfo
 		}
 	}
 
-	var parts []SetPart
+	var parts []SetPart //nolint:prealloc // length unknown until SetParts is iterated and filtered
 	for _, partID := range item.SetParts {
 		if partID == item.ID {
 			continue // skip the set itself

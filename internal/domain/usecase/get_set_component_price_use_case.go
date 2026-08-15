@@ -91,7 +91,7 @@ func buildBuyPlan(orders []service.Order, need int) []BuyOrderLine {
 	sorted := slices.SortedFunc(slices.Values(orders), func(a, b service.Order) int {
 		return a.Platinum - b.Platinum
 	})
-	var lines []BuyOrderLine
+	var lines []BuyOrderLine //nolint:prealloc // length unknown until orders are consumed
 	for _, o := range sorted {
 		if need <= 0 {
 			break

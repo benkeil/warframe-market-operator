@@ -48,7 +48,8 @@ func newSearchCommand(debug *bool) *cobra.Command {
 	cmd.Flags().IntVar(&reRollsMax, "re-rolls-max", 0, "Maximum number of re-rolls (0 = no limit)")
 	cmd.Flags().IntVar(&maxPrice, "max-price", 0, "Maximum buyout price in platinum (0 = no limit)")
 	cmd.Flags().StringSliceVar(&statusFilter, "status", nil, "Filter by owner status: ingame, online, offline")
-	cmd.Flags().BoolVar(&buyoutOnly, "buyout-only", false, "Only show direct-sell auctions (exclude bidding-only listings)")
+	cmd.Flags().BoolVar(&buyoutOnly, "buyout-only", false,
+		"Only show direct-sell auctions (exclude bidding-only listings)")
 	return cmd
 }
 
