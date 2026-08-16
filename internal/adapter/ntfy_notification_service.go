@@ -32,6 +32,14 @@ type NtfyConfig struct {
 	Token string
 }
 
+type NotificationRequest struct {
+	Topic   string           `json:"topic"`
+	Title   string           `json:"title"`
+	Message string           `json:"message"`
+	Actions []service.Action `json:"actions,omitempty"`
+	Tags    []string         `json:"tags,omitempty"`
+}
+
 // NewNtfyNotificationService creates a new NtfyNotificationService.
 func NewNtfyNotificationService(cfg NtfyConfig) *NtfyNotificationService {
 	return &NtfyNotificationService{
@@ -74,13 +82,19 @@ func (s *NtfyNotificationService) Notify(ctx context.Context, title, message str
 }
 
 func (s *NtfyNotificationService) Send(ctx context.Context, notification service.Notification) error {
-	url := fmt.Sprintf("%s/%s", s.serverURL, s.topic)
-	body, err := json.Marshal(notification)
+	request := NotificationRequest{
+		Topic:   s.topic,
+		Title:   notification.Title,
+		Message: notification.Message,
+		Actions: notification.Actions,
+		Tags:    notification.Tags,
+	}
+	body, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.serverURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("creating ntfy request: %w", err)
 	}
