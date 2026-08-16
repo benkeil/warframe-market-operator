@@ -1,10 +1,14 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/benkeil/warframe-market-operator/internal/domain/service"
 )
 
 // NtfyNotificationService implements service.NotificationService using ntfy (https://ntfy.sh).
@@ -15,6 +19,8 @@ type NtfyNotificationService struct {
 	token      string // optional; required for protected topics
 	httpClient *http.Client
 }
+
+var _ service.NotificationService = (*NtfyNotificationService)(nil)
 
 // NtfyConfig holds configuration for NtfyNotificationService.
 type NtfyConfig struct {
@@ -54,6 +60,31 @@ func (s *NtfyNotificationService) Notify(ctx context.Context, title, message str
 		req.Header.Set("Authorization", "Bearer "+s.token)
 	}
 
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending ntfy notification: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("ntfy returned unexpected status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (s *NtfyNotificationService) Send(ctx context.Context, notification service.Notification) error {
+	url := fmt.Sprintf("%s/%s", s.serverURL, s.topic)
+	body, err := json.Marshal(notification)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("creating ntfy request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("sending ntfy notification: %w", err)

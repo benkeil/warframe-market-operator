@@ -142,10 +142,21 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 		}
 
 		log.Info("sending notification", "auctionID", a.ID, "price", a.BuyoutPrice, "rollQuality", quality)
-		title := fmt.Sprintf("Riven alert: %s", rpw.Spec.WeaponSlug)
-		message := fmt.Sprintf("%s — %dp | roll quality: %d%% | seller: %s (%s)",
-			a.Item.Name, a.BuyoutPrice, quality, a.Owner.IngameName, a.Owner.Status)
-		if err := uc.notificationService.Notify(ctx, title, message); err != nil {
+		title := fmt.Sprintf("Riven alert: %s", a.Item.Name)
+		message := fmt.Sprintf("%dp | roll quality: %d%% | seller: %s (%s)", a.BuyoutPrice, quality, a.Owner.IngameName, a.Owner.Status)
+		notification := service.Notification{
+			Title:   title,
+			Message: message,
+			Tags:    []string{"loudspeaker"},
+			Actions: []service.Action{
+				{
+					Type:  service.ActionTypeView,
+					Label: "Open on Warframe Market",
+					Url:   fmt.Sprintf("https://warframe.market/auction/%s", a.ID),
+				},
+			},
+		}
+		if err := uc.notificationService.Send(ctx, notification); err != nil {
 			log.Error(err, "failed to send notification", "auctionID", a.ID)
 			status.WithNotifiedAuctionIDs(newNotifiedIDs...).WithConditions(condition.
 				WithStatus(metav1.ConditionTrue).

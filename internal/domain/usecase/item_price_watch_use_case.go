@@ -115,9 +115,20 @@ func (uc *ItemPriceWatchUseCase) Execute(ctx context.Context, priceWatch *warfra
 
 	log.Info("sending notification", "cheapest", cheapestOrder.Platinum, "seller", cheapestOrder.User.IngameName)
 	title := fmt.Sprintf("Price alert: %s", priceWatch.Spec.ItemSlug)
-	message := fmt.Sprintf("%d platinum | seller: %s (%s) | threshold: %d",
-		cheapestOrder.Platinum, cheapestOrder.User.IngameName, cheapestOrder.User.Status, priceWatch.Spec.Threshold)
-	if err := uc.notificationService.Notify(ctx, title, message); err != nil {
+	message := fmt.Sprintf("%dp | seller: %s (%s)", cheapestOrder.Platinum, cheapestOrder.User.IngameName, cheapestOrder.User.Status)
+	notification := service.Notification{
+		Title:   title,
+		Message: message,
+		Tags:    []string{"loudspeaker"},
+		Actions: []service.Action{
+			{
+				Type:  service.ActionTypeView,
+				Label: "Open on Warframe Market",
+				Url:   fmt.Sprintf("https://warframe.market/items/%s?type=sell", priceWatch.Spec.ItemSlug),
+			},
+		},
+	}
+	if err := uc.notificationService.Send(ctx, notification); err != nil {
 		log.Error(err, "failed to send notification")
 		status.WithNotifiedOrderID(notifiedOrderID).WithConditions(condition)
 		return &ItemPriceWatchResult{Status: status}, fmt.Errorf("sending notification: %w", err)

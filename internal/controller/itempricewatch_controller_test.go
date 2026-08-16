@@ -65,9 +65,15 @@ type stubNotificationService struct {
 	sent []string
 }
 
+var _ service.NotificationService = (*stubNotificationService)(nil)
+
 func (s *stubNotificationService) Notify(_ context.Context, title, _ string) error {
 	s.sent = append(s.sent, fmt.Sprintf("notified: %s", title))
 	return nil
+}
+
+func (s *stubNotificationService) Send(ctx context.Context, notification service.Notification) error {
+	return s.Notify(ctx, notification.Title, notification.Message)
 }
 
 const testNamespace = "default"
