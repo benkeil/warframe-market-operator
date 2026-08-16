@@ -35,6 +35,8 @@ type WarframeExportService interface {
 
 // WeaponInfo holds riven-relevant metadata for a weapon.
 type WeaponInfo struct {
+	// The name of the weapon as used in the Warframe public export (e.g. "MK1-Paris").
+	Name string
 	// Disposition is the riven disposition multiplier (omegaAttenuation), 0.5–1.55.
 	Disposition float64
 	// Category is the product category (e.g. "Melee", "Pistols", "Primary", "Shotguns").

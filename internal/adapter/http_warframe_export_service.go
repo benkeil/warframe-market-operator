@@ -185,6 +185,7 @@ func (s *HttpWarframeExportService) GetWeaponByName(ctx context.Context, name st
 	for _, w := range raw.ExportWeapons {
 		if strings.ToLower(w.Name) == nameLower {
 			return &service.WeaponInfo{
+				Name:        w.Name,
 				Disposition: w.OmegaAttenuation,
 				Category:    w.ProductCategory,
 			}, nil

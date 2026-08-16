@@ -142,7 +142,7 @@ func (uc *RivenPriceWatchUseCase) Execute(ctx context.Context, rpw *warframemark
 		}
 
 		log.Info("sending notification", "auctionID", a.ID, "price", a.BuyoutPrice, "rollQuality", quality)
-		title := fmt.Sprintf("Riven alert: %s", rpw.Spec.WeaponSlug)
+		title := fmt.Sprintf("Riven alert: %s", weapon.Name)
 		message := fmt.Sprintf("%dp | roll quality: %d%% | seller: %s (%s)", a.BuyoutPrice, quality, a.Owner.IngameName, a.Owner.Status)
 		notification := service.Notification{
 			Title:   title,

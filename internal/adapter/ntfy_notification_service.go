@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -33,11 +34,18 @@ type NtfyConfig struct {
 }
 
 type NotificationRequest struct {
-	Topic   string           `json:"topic"`
-	Title   string           `json:"title"`
-	Message string           `json:"message"`
-	Actions []service.Action `json:"actions,omitempty"`
-	Tags    []string         `json:"tags,omitempty"`
+	Topic   string   `json:"topic"`
+	Title   string   `json:"title"`
+	Message string   `json:"message"`
+	Actions []Action `json:"actions,omitempty"`
+	Tags    []string `json:"tags,omitempty"`
+}
+
+type Action struct {
+	Action string `json:"action"`
+	Label  string `json:"label"`
+	Url    string `json:"url,omitempty"`
+	Clear  bool   `json:"clear,omitempty"`
 }
 
 // NewNtfyNotificationService creates a new NtfyNotificationService.
@@ -82,11 +90,20 @@ func (s *NtfyNotificationService) Notify(ctx context.Context, title, message str
 }
 
 func (s *NtfyNotificationService) Send(ctx context.Context, notification service.Notification) error {
+	actions := make([]Action, len(notification.Actions))
+	for i, a := range notification.Actions {
+		actions[i] = Action{
+			Action: string(a.Type),
+			Label:  a.Label,
+			Url:    a.Url,
+			Clear:  a.Clear,
+		}
+	}
 	request := NotificationRequest{
 		Topic:   s.topic,
 		Title:   notification.Title,
 		Message: notification.Message,
-		Actions: notification.Actions,
+		Actions: actions,
 		Tags:    notification.Tags,
 	}
 	body, err := json.Marshal(request)
@@ -106,7 +123,8 @@ func (s *NtfyNotificationService) Send(ctx context.Context, notification service
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("ntfy returned unexpected status %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ntfy returned unexpected status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return nil
